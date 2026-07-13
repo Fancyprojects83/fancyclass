@@ -1,6 +1,6 @@
 {
-  "name": "ClassFlow - Πρόγραμμα Σχολείου",
-  "short_name": "ClassFlow",
+  "name": "FancyClass",
+  "short_name": "Fancyclass",
   "start_url": "/index.html",
   "scope": "/",
   "display": "standalone",
