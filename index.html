@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClassFlow - Πρόγραμμα Σχολείου</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="icon" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --bg-app: #0f172a;
+            --bg-card: #1e293b;
+        }
+        body { 
+             background-color: var(--bg-app); 
+             color: #f8fafc; 
+             transition: background-color 0.3s ease;
+             user-select: none;
+        }
+        .bg-accent { background-color: var(--accent); }
+        .text-accent { color: var(--accent); }
+        .border-accent { border-color: var(--accent); }
+        .cell { 
+             min-height: 250px; 
+             transition: all 0.3s ease; 
+             border-radius: 1.25rem; 
+             background-color: var(--bg-card); 
+        }
+        .editable:focus { 
+             outline: none; 
+             background-color: rgba(255,255,255,0.08); 
+             border-radius: 0.5rem; 
+             box-shadow: 0 0 0 2px var(--accent); 
+        }
+        .preview-img { object-fit: contain; border-radius: 12px; transition: width 0.1s ease; }
+        input[type="color"] {
+             -webkit-appearance: none;
+             border: none;
+             width: 22px;
+             height: 22px;
+             cursor: pointer;
+             background: none;
+             border-radius: 50%;
+             overflow: hidden;
+        }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; }
+        .dragging {
+            opacity: 0.5;
+            transform: scale(0.95);
+            border: 2px dashed var(--accent) !important;
+        }
+        .drag-over {
+            border: 2px solid var(--accent) !important;
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+            transform: scale(1.02);
+        }
+        .active-swap-source {
+            animation: pulse-border 1.5s infinite;
+            border: 3px solid #f59e0b !important;
+        }
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(245, 158, 11, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.25s ease-out forwards;
+        }
+        @media print {
+            body { background: white !important; color: black !important; padding: 0 !important; }
+            header, .no-print, button, input, select, .group-hover\:opacity-100, .stamp-container, .cell-slider-container { display: none !important; }
+            .cell { 
+                 min-height: auto !important; 
+                 background-color: white !important; 
+                 border: 2px solid #cbd5e1 !important; 
+                 color: black !important;
+                 page-break-inside: avoid;
+            }
+            #scheduleGrid { 
+                 grid-template-columns: repeat(6, 1fr) !important; 
+                 gap: 6px !important; 
+             }
+            .editable { color: #000000 !important; }
+            .preview-img { max-height: 110px !important; }
+        }
+        /* Login form styles */
+        #login-form {
+            max-width: 380px;
+            margin: 10vh auto;
+            padding: 2rem;
+            background: #1e293b;
+            border-radius: 2rem;
+            border: 1px solid #334155;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+        }
+        #login-form input {
+            width: 100%;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 1rem;
+            color: white;
+            font-size: 1rem;
+            outline: none;
+        }
+        #login-form input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.3);
+        }
+        #login-form button {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: white;
+            font-weight: 900;
+            border: none;
+            border-radius: 1rem;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #login-form button:hover {
+            background: var(--accent-hover);
+        }
+        #login-error {
+            color: #f87171;
+            font-size: 0.9rem;
+            margin-top: 8px;
+            text-align: center;
+        }
+        #app-content {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- LOGIN FORM -->
+    <div id="login-form">
+        <h1 class="text-3xl font-black text-center mb-6 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">🔐 ClassFlow</h1>
+        <p class="text-slate-400 text-sm text-center mb-6">Συνδεθείτε για να δείτε το πρόγραμμά σας</p>
+        <input type="email" id="email" placeholder="Email" required>
+        <input type="password" id="password" placeholder="Κωδικός" required>
+        <button id="login-btn">Σύνδεση</button>
+        <div id="login-error"></div>
+    </div>
+
+    <!-- MAIN APPLICATION (hidden until login) -->
+    <div id="app-content" class="p-4 md:p-8 font-sans max-w-[98%] mx-auto">
+
+        <!-- HEADER & SELECTORS -->
+        <header class="mb-6 text-center no-print">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center gap-2">
+                    <img src="https://media.base44.com/images/public/6a475d1d4890e09d795dfcae/af4793167_logo.png" alt="ClassFlow" class="w-8 h-8 object-contain">
+                    <h1 id="appTitle" contenteditable="true" onblur="saveAppTitle(this.innerText)" class="text-3xl font-black tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent focus:outline-none focus:ring-1 focus:ring-slate-500 rounded px-1 cursor-text" title="Κάντε κλικ για αλλαγή του τίτλου">
+                        ClassFlow
+                    </h1>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="user-email" class="text-slate-400 text-sm font-bold mr-2"></span>
+                    <button onclick="logoutUser()" class="px-4 py-2 bg-red-600/30 hover:bg-red-600/50 text-red-300 rounded-xl border border-red-500/30 transition-all text-sm font-bold">🚪 Αποσύνδεση</button>
+                    <button onclick="openSettingsModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all text-slate-300 font-bold flex items-center gap-2 text-sm">
+                        ⚙️ Ρυθμίσεις
+                    </button>
+                </div>
+            </div>
+
+            <!-- Student Pills Selector -->
+            <div class="flex flex-wrap justify-center items-center gap-3 mb-6 bg-slate-900/60 p-4 rounded-3xl border border-slate-800 backdrop-blur">
+                <span class="text-slate-400 font-bold text-sm mr-2">ΜΑΘΗΤΕΣ:</span>
+                <div id="studentSelector" class="flex flex-wrap gap-2"></div>
+                <button onclick="createNewStudent()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black transition-all shadow-md text-sm flex items-center gap-1">
+                    ➕ Νέος Μαθητής
+                </button>
+            </div>
+                        
+            <!-- Custom Stamps Toolbar -->
+            <div class="mb-6 bg-slate-900/40 p-4 rounded-2xl border border-slate-800 flex flex-col gap-3 justify-center items-center stamp-container">
+                <div class="flex flex-col md:flex-row justify-between items-center w-full px-2 gap-2">
+                    <span class="text-xs font-black text-slate-400 tracking-wider">🖌️ ΔΙΚΕΣ ΣΟΥ ΣΦΡΑΓΙΔΕΣ ΜΑΘΗΜΑΤΩΝ (Ενεργοποίησε μία και κάνε κλικ σε ένα κελί)</span>
+                    <button onclick="openStampCreatorModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl transition-all shadow-sm">
+                        ➕ Δημιουργία Σφραγίδας
+                    </button>
+                </div>
+                <div id="customStampsContainer" class="flex flex-wrap gap-2 justify-center"></div>
+            </div>
+                        
+            <!-- Quick Toolbar -->
+            <div class="flex flex-wrap justify-between items-center gap-4 bg-slate-800/80 p-4 rounded-2xl shadow-xl border border-slate-700">
+                <div class="flex items-center gap-3">
+                    <span class="text-slate-400 font-bold text-sm">Πρόγραμμα:</span>
+                    <div id="activeStudentHeaderPhotoContainer" class="hidden">
+                        <img id="activeStudentHeaderPhoto" class="w-10 h-10 rounded-full object-cover border-2 border-accent" src="" alt="Avatar">
+                    </div>
+                    <input type="text" id="studentName" placeholder="Όνομα Μαθητή..." onfocus="saveUndoState()" oninput="autoSave()" class="text-lg px-3 py-1.5 bg-slate-900 focus:outline-none border-b-2 border-accent rounded-lg font-bold text-white w-56">
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="addHour()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm flex items-center gap-1">
+                        ⏱️ + Ώρα
+                    </button>
+                    <button id="undoBtn" onclick="undo()" class="bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-200 px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm disabled:cursor-not-allowed">
+                        ↩️ Αναίρεση
+                    </button>
+                    <button onclick="manualSave()" class="bg-accent hover:bg-accent-hover text-white px-5 py-2.5 rounded-xl font-black transition-all shadow-md text-sm">
+                        💾 Αποθήκευση
+                    </button>
+                    <button onclick="clearCurrentBoardRequest()" class="bg-red-600/80 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm">
+                        🗑️ Εκκαθάριση
+                    </button>
+                    <button onclick="triggerPrint()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm flex items-center gap-1">
+                        🖨️ Εκτύπωση
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- SCHEDULE GRID -->
+        <div id="scheduleGrid" class="grid grid-cols-6 gap-3"></div>
+
+        <!-- MODALS (unchanged) -->
+        <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print">
+            <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+                <h3 class="text-xl font-black mb-6 flex items-center gap-2">⚙️ Ρυθμίσεις Εμφάνισης</h3>
+                <div class="mb-6 bg-slate-900/50 p-4 rounded-2xl border border-slate-700/50">
+                    <label class="block text-slate-300 text-sm font-bold mb-3 flex justify-between items-center">
+                        <span>Χρώμα Εφαρμογής (Accent):</span>
+                        <input type="color" id="accentColorPicker" oninput="applyCustomAccent(this.value)" class="w-10 h-10 cursor-pointer">
+                    </label>
+                </div>
+                <div class="mb-6 bg-slate-900/50 p-4 rounded-2xl border border-slate-700/50">
+                    <label class="block text-slate-300 text-sm font-bold mb-3 flex justify-between items-center">
+                        <span>Χρώμα Φόντου Εφαρμογής:</span>
+                        <input type="color" id="bgColorPicker" oninput="applyCustomBackground(this.value)" class="w-10 h-10 cursor-pointer">
+                    </label>
+                </div>
+                <div class="mb-6 bg-slate-900/50 p-4 rounded-2xl border border-slate-700/50">
+                    <label class="block text-slate-300 text-sm font-bold mb-3 flex justify-between items-center">
+                        <span>Χρώμα Κουτιών (Κελιά):</span>
+                        <input type="color" id="cardBgColorPicker" oninput="applyCustomCardBackground(this.value)" class="w-10 h-10 cursor-pointer">
+                    </label>
+                </div>
+                <div class="flex justify-end gap-2 mt-8">
+                    <button onclick="closeSettingsModal()" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-sm">Κλείσιμο</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="stampCreatorModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print">
+            <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+                <h3 class="text-xl font-black mb-4 flex items-center gap-2">🎨 Δημιουργία Σφραγίδας</h3>
+                <div class="mb-4">
+                    <label class="block text-slate-400 text-sm font-bold mb-2">Όνομα Μαθήματος / Δραστηριότητας:</label>
+                    <input type="text" id="stampInputText" placeholder="π.χ. Μαθηματικά..." class="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl font-bold text-white focus:outline-none focus:border-accent">
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-slate-400 text-xs font-bold mb-1">Χρώμα Φόντου:</label>
+                        <div class="flex items-center gap-2 bg-slate-900 p-2.5 rounded-xl border border-slate-700">
+                            <input type="color" id="stampInputBg" value="#1e3a8a">
+                            <span class="text-slate-300 text-sm font-mono text-center">Επιλογή</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 text-xs font-bold mb-1">Χρώμα Κειμένου:</label>
+                        <div class="flex items-center gap-2 bg-slate-900 p-2.5 rounded-xl border border-slate-700">
+                            <input type="color" id="stampInputColor" value="#93c5fd">
+                            <span class="text-slate-300 text-sm font-mono text-center">Επιλογή</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-5 bg-slate-900/40 p-4 rounded-2xl border border-slate-700/60 flex flex-col items-center">
+                    <label class="block text-slate-300 text-sm font-bold mb-2 self-start">Εικόνα Σφραγίδας (Προαιρετικό):</label>
+                    <div class="relative w-20 h-20 mb-3 bg-slate-950/60 rounded-xl flex items-center justify-center overflow-hidden border border-slate-700">
+                        <img id="stampImagePreview" class="hidden w-full h-full object-contain" src="" alt="Stamp preview">
+                        <span id="stampImagePlaceholder" class="text-2xl text-slate-600">🖼️</span>
+                    </div>
+                    <div class="flex gap-2 w-full justify-center">
+                        <input type="file" id="stampImageUploadInput" class="hidden" accept="image/*" onchange="handleStampImageUpload(event)">
+                        <button onclick="document.getElementById('stampImageUploadInput').click()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all">📸 Φόρτωση</button>
+                        <button onclick="removeStampImagePreview()" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold transition-all">✕ Διαγραφή</button>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button onclick="closeStampCreatorModal()" class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-sm">Ακύρωση</button>
+                    <button onclick="saveCreatedStamp()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-black text-sm text-white">Προσθήκη</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="studentEditModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print">
+            <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+                <h3 class="text-xl font-black mb-4 flex items-center gap-2">📝 Επεξεργασία Μαθητή</h3>
+                <input type="hidden" id="editStudentId">
+                <div class="mb-5">
+                    <label class="block text-slate-400 text-sm font-bold mb-2">Όνομα Μαθητή:</label>
+                    <input type="text" id="editStudentName" class="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl font-bold text-white focus:outline-none focus:border-accent">
+                </div>
+                <div class="mb-6 bg-slate-900/40 p-4 rounded-2xl border border-slate-700/60 flex flex-col items-center">
+                    <label class="block text-slate-300 text-sm font-bold mb-3 self-start">Φωτογραφία Μαθητή:</label>
+                    <div class="relative w-24 h-24 mb-4">
+                        <img id="editStudentAvatarPreview" class="w-24 h-24 rounded-full object-cover border-4 border-slate-700 shadow-md" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'/></svg>" alt="Προεπισκόπηση">
+                    </div>
+                    <div class="flex gap-2 w-full justify-center">
+                        <input type="file" id="studentAvatarInput" class="hidden" accept="image/*" onchange="handleStudentAvatarUpload(event)">
+                        <button onclick="document.getElementById('studentAvatarInput').click()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all">📸 Ανέβασμα</button>
+                        <button onclick="removeStudentAvatar()" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold transition-all">✕ Αφαίρεση</button>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mt-6">
+                    <button onclick="deleteStudentFromEdit()" class="px-4 py-2.5 bg-red-600/30 hover:bg-red-600/50 border border-red-500/50 rounded-xl font-bold text-sm text-red-400">🗑️ Διαγραφή</button>
+                    <div class="flex gap-2">
+                        <button onclick="closeStudentEditModal()" class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-sm">Ακύρωση</button>
+                        <button onclick="saveStudentEdit()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-black text-sm text-white">Αποθήκευση</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="confirmModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print">
+            <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center">
+                <div class="text-4xl mb-4" id="confirmIcon">⚠️</div>
+                <h4 class="text-lg font-black mb-2" id="confirmTitle">Είστε σίγουροι;</h4>
+                <p class="text-slate-400 text-sm mb-6" id="confirmMessage">Αυτή η ενέργεια δεν αναιρείται.</p>
+                <div class="flex justify-center gap-3">
+                    <button id="confirmCancelBtn" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-sm">Ακύρωση</button>
+                    <button id="confirmActionBtn" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl font-bold text-sm text-white">Διαγραφή</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 border-2 border-accent text-white px-6 py-3 rounded-2xl shadow-2xl z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none font-bold flex items-center gap-2 no-print">
+            <span id="toastIcon">✨</span> <span id="toastText">Έγινε!</span>
+        </div>
+
+    </div> <!-- end app-content -->
+
+    <!-- FIREBASE SDK -->
+    <script type="importmap">
+        {
+            "imports": {
+                "firebase/app": "https://www.gstatic.com/firebasejs/11.7.0/firebase-app.js",
+                "firebase/auth": "https://www.gstatic.com/firebasejs/11.7.0/firebase-auth.js",
+                "firebase/database": "https://www.gstatic.com/firebasejs/11.7.0/firebase-database.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        // -------------------- FIREBASE IMPORTS --------------------
+        import { initializeApp } from 'firebase/app';
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+        import { getDatabase, ref, set, get, onValue } from 'firebase/database';
+
+        // -------------------- YOUR FIREBASE CONFIG --------------------
+        const firebaseConfig = {
+          apiKey: "AIzaSyB7NlTY1__aJjyFDEa9hvGmQucntRoaf_g",
+          authDomain: "fancyschedule-b6b37.firebaseapp.com",
+          databaseURL: "https://fancyschedule-b6b37-default-rtdb.firebaseio.com",
+          projectId: "fancyschedule-b6b37",
+          storageBucket: "fancyschedule-b6b37.firebasestorage.app",
+          messagingSenderId: "438208010686",
+          appId: "1:438208010686:web:94b1a971b1c7c7e37f81ef"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+
+        // -------------------- DOM REFS FOR LOGIN --------------------
+        const loginForm = document.getElementById('login-form');
+        const appContent = document.getElementById('app-content');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const loginBtn = document.getElementById('login-btn');
+        const loginError = document.getElementById('login-error');
+        const userEmailSpan = document.getElementById('user-email');
+
+        // -------------------- GLOBAL STATE --------------------
+        let config = {
+            appTitle: 'ClassFlow',
+            currentStudentId: 's1',
+            accent: 'indigo',
+            accentHex: '#6366f1',
+            accentHoverHex: '#4f46e5',
+            bgApp: '#0f172a',
+            bgCard: '#1e293b',
+            students: [{ id: 's1', name: 'Μαθητής 1', avatar: '' }],
+            customStamps: []
+        };
+
+        const defaultTimes = ['08:00', '09:00', '10:00-10:30', '11:00', '12:00'];
+        let currentTimes = [...defaultTimes];
+        let currentCells = {};
+        let activeStamp = null;
+        let undoStack = [];
+        let draggedCellId = null;
+        let activeSwapSourceId = null;
+        let tempStampImageFile = null;
+        let tempStampPreviewURL = null;
+        let tempAvatarFile = null;
+        let tempAvatarPreviewURL = null;
+        let confirmCallback = null;
+        let isInitialLoad = true;
+
+        const IMGBB_API_KEY = 'b1a8388f6b7c544529b95f37048a3c7e';
+
+        // Helper functions (rgbToHex, showToast, openConfirm)
+        function rgbToHex(color) {
+            if (!color || typeof color !== 'string') return '#1e293b';
+            color = color.trim().toLowerCase();
+            if (color.startsWith('#')) {
+                if (color.length === 4) {
+                    return '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+                }
+                return color;
+            }
+            const names = { 'transparent': '#1e293b', 'white': '#ffffff', 'black': '#000000' };
+            if (names[color]) return names[color];
+            const match = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*\d+(?:\.\d+)?)?\)$/);
+            if (!match) return '#1e293b';
+            const r = parseInt(match[1], 10);
+            const g = parseInt(match[2], 10);
+            const b = parseInt(match[3], 10);
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        function showToast(text, icon = '✨') {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastText').innerText = text;
+            document.getElementById('toastIcon').innerText = icon;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2500);
+        }
+
+        function openConfirm(title, message, icon, buttonText, onConfirm) {
+            document.getElementById('confirmTitle').innerText = title;
+            document.getElementById('confirmMessage').innerText = message;
+            document.getElementById('confirmIcon').innerText = icon;
+            const actionBtn = document.getElementById('confirmActionBtn');
+            actionBtn.innerText = buttonText;
+            if (buttonText === 'Διαγραφή' || buttonText === 'Εκκαθάριση') {
+                actionBtn.className = "px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl font-bold text-sm text-white";
+            } else {
+                actionBtn.className = "px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-xl font-bold text-sm text-white";
+            }
+            document.getElementById('confirmModal').classList.remove('hidden');
+            confirmCallback = onConfirm;
+        }
+        document.getElementById('confirmCancelBtn').onclick = () => {
+            document.getElementById('confirmModal').classList.add('hidden');
+            confirmCallback = null;
+        };
+        document.getElementById('confirmActionBtn').onclick = () => {
+            if (confirmCallback) confirmCallback();
+            document.getElementById('confirmModal').classList.add('hidden');
+            confirmCallback = null;
+        };
+
+        // -------------------- IMGBB UPLOAD FUNCTION --------------------
+        async function uploadImageToImgBB(file) {
+            if (!file) return null;
+            const formData = new FormData();
+            formData.append('key', IMGBB_API_KEY);
+            formData.append('image', file);
+
+            try {
+                const response = await fetch('https://api.imgbb.com/1/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!response.ok) {
+                    throw new Error('ImgBB upload failed');
+                }
+                const data = await response.json();
+                if (data.success) {
+                    return data.data.url;
+                } else {
+                    throw new Error('ImgBB error: ' + (data.error?.message || 'unknown'));
+                }
+            } catch (error) {
+                console.error('ImgBB upload error:', error);
+                showToast('Σφάλμα ανεβάσματος εικόνας στο ImgBB', '❌');
+                return null;
+            }
+        }
+
+        // -------------------- FIREBASE READ/WRITE FUNCTIONS --------------------
+        function saveFullStateToFirebase(userId) {
+            const payload = {
+                config: config,
+                currentTimes: currentTimes,
+                currentCells: currentCells,
+            };
+            set(ref(db, 'users/' + userId + '/appState'), payload)
+                .catch((error) => {
+                    console.error('Σφάλμα αποθήκευσης στο Firebase:', error);
+                    showToast("Σφάλμα αποθήκευσης!", "❌");
+                });
+        }
+
+        function loadFullStateFromFirebase(userId) {
+            const stateRef = ref(db, 'users/' + userId + '/appState');
+            return get(stateRef).then((snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    console.log('📦 Δεδομένα φορτώθηκαν από Firebase:', data);
+                    config = data.config || config;
+                    if (!config.customStamps) config.customStamps = [];
+                    if (!config.students) config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
+                    config.students.forEach(s => { if (s.avatar === undefined) s.avatar = ''; });
+                    currentTimes = data.currentTimes || [...defaultTimes];
+                    currentCells = data.currentCells || {};
+                    document.documentElement.style.setProperty('--accent', config.accentHex || '#6366f1');
+                    document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
+                    document.documentElement.style.setProperty('--bg-app', config.bgApp || '#0f172a');
+                    document.documentElement.style.setProperty('--bg-card', config.bgCard || '#1e293b');
+                    if (config.appTitle) {
+                        document.getElementById('appTitle').innerText = config.appTitle;
+                    }
+                    return true;
+                } else {
+                    console.log('🆕 Πρώτη φορά χρήστη – χρησιμοποιώ default values');
+                    currentTimes = [...defaultTimes];
+                    currentCells = {};
+                    config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
+                    config.customStamps = [];
+                    return false;
+                }
+            }).catch((error) => {
+                console.error('Σφάλμα φόρτωσης:', error);
+                showToast("Σφάλμα φόρτωσης δεδομένων!", "❌");
+                return false;
+            });
+        }
+
+        function listenForRemoteChanges(userId) {
+            const stateRef = ref(db, 'users/' + userId + '/appState');
+            onValue(stateRef, (snapshot) => {
+                if (snapshot.exists() && !isInitialLoad) {
+                    const data = snapshot.val();
+                    const oldConfig = JSON.stringify(config);
+                    const oldTimes = JSON.stringify(currentTimes);
+                    const oldCells = JSON.stringify(currentCells);
+
+                    config = data.config || config;
+                    if (!config.customStamps) config.customStamps = [];
+                    if (!config.students) config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
+                    config.students.forEach(s => { if (s.avatar === undefined) s.avatar = ''; });
+                    currentTimes = data.currentTimes || [...defaultTimes];
+                    currentCells = data.currentCells || {};
+
+                    document.documentElement.style.setProperty('--accent', config.accentHex || '#6366f1');
+                    document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
+                    document.documentElement.style.setProperty('--bg-app', config.bgApp || '#0f172a');
+                    document.documentElement.style.setProperty('--bg-card', config.bgCard || '#1e293b');
+                    if (config.appTitle) {
+                        document.getElementById('appTitle').innerText = config.appTitle;
+                    }
+
+                    if (oldConfig !== JSON.stringify(config) || oldTimes !== JSON.stringify(currentTimes) || oldCells !== JSON.stringify(currentCells)) {
+                        renderStudentPills();
+                        renderCustomStamps();
+                        renderGrid();
+                        updateHeaderDetails();
+                        showToast("Συγχρονίστηκε με το cloud!", "🔄");
+                    }
+                }
+                isInitialLoad = false;
+            }, (error) => {
+                console.error('Σφάλμα ακρόασης:', error);
+            });
+        }
+
+        // Auto-save wrapper
+        function autoSaveToFirebase() {
+            const user = auth.currentUser;
+            if (user) {
+                saveFullStateToFirebase(user.uid);
+            }
+        }
+
+        // Debounce helper για το slider
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
+        // -------------------- LOGIN / LOGOUT --------------------
+        loginBtn.addEventListener('click', () => {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value.trim();
+            if (!email || !password) {
+                loginError.textContent = 'Συμπληρώστε email και κωδικό.';
+                return;
+            }
+            loginError.textContent = '';
+            signInWithEmailAndPassword(auth, email, password)
+                .catch((error) => {
+                    loginError.textContent = 'Λάθος email ή κωδικός.';
+                    console.error(error.message);
+                });
+        });
+        emailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
+        passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
+
+        window.logoutUser = function() {
+            signOut(auth);
+            loginForm.style.display = 'block';
+            appContent.style.display = 'none';
+            showToast("Αποσυνδεθήκατε", "👋");
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                console.log('✅ Χρήστης συνδέθηκε:', user.email);
+                loginForm.style.display = 'none';
+                appContent.style.display = 'block';
+                userEmailSpan.textContent = user.email;
+
+                currentTimes = [...defaultTimes];
+                currentCells = {};
+                config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
+                config.customStamps = [];
+
+                isInitialLoad = true;
+                loadFullStateFromFirebase(user.uid).then(() => {
+                    listenForRemoteChanges(user.uid);
+                    renderStudentPills();
+                    renderCustomStamps();
+                    renderGrid();
+                    updateHeaderDetails();
+                    showToast("Καλώς ήρθατε!", "👋");
+                });
+            } else {
+                loginForm.style.display = 'block';
+                appContent.style.display = 'none';
+                undoStack = [];
+                document.getElementById('undoBtn').disabled = true;
+            }
+        });
+
+        // -------------------- ΟΛΕΣ ΟΙ ΣΥΝΑΡΤΗΣΕΙΣ (με autoSave) --------------------
+
+        window.saveAppTitle = function(text) {
+            config.appTitle = text.trim() || 'ClassFlow';
+            autoSaveToFirebase();
+            showToast("Ο τίτλος ενημερώθηκε!", "✏️");
+        };
+
+        window.applyCustomAccent = function(hex) {
+            config.accentHex = hex;
+            config.accentHoverHex = adjustColorBrightness(hex, -20);
+            document.documentElement.style.setProperty('--accent', hex);
+            document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex);
+            autoSaveToFirebase();
+        };
+        window.applyCustomBackground = function(hex) {
+            config.bgApp = hex;
+            document.documentElement.style.setProperty('--bg-app', hex);
+            autoSaveToFirebase();
+        };
+        window.applyCustomCardBackground = function(hex) {
+            config.bgCard = hex;
+            document.documentElement.style.setProperty('--bg-card', hex);
+            autoSaveToFirebase();
+        };
+        function adjustColorBrightness(hex, percent) {
+            hex = rgbToHex(hex);
+            let num = parseInt(hex.replace("#",""), 16),
+            amt = Math.round(2.55 * percent),
+            R = (num >> 16) + amt,
+            G = (num >> 8 & 0x00FF) + amt,
+            B = (num & 0x0000FF) + amt;
+            return "#" + (0x1000000 + (R<255?R<0?0:R:255)*0x10000 + (G<255?G<0?0:G:255)*0x100 + (B<255?B<0?0:B:255)).toString(16).slice(1);
+        }
+
+        window.openSettingsModal = function() {
+            document.getElementById('accentColorPicker').value = rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+            document.getElementById('bgColorPicker').value = rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--bg-app').trim());
+            document.getElementById('cardBgColorPicker').value = rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim());
+            document.getElementById('settingsModal').classList.remove('hidden');
+        };
+        window.closeSettingsModal = function() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        };
+
+        window.createNewStudent = function() {
+            saveUndoState();
+            const id = 's_' + Date.now();
+            const num = config.students.length + 1;
+            const newStudent = { id: id, name: `Μαθητής ${num}`, avatar: '' };
+            config.students.push(newStudent);
+            config.currentStudentId = id;
+            currentTimes = [...defaultTimes];
+            currentCells = {};
+            autoSaveToFirebase();
+            switchStudent(id);
+            showToast("Δημιουργήθηκε νέος μαθητής!", "👤");
+        };
+
+        function switchStudent(studentId) {
+            config.currentStudentId = studentId;
+            renderStudentPills();
+            renderGrid();
+            updateHeaderDetails();
+            autoSaveToFirebase();
+        }
+        window.switchStudent = switchStudent;
+
+        window.renderStudentPills = function() {
+            const container = document.getElementById('studentSelector');
+            container.innerHTML = '';
+            if (!config.students || config.students.length === 0) {
+                config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
+            }
+            config.students.forEach(s => {
+                const isActive = s.id === config.currentStudentId;
+                const pillClass = isActive 
+                    ? `bg-accent text-white shadow-lg border-2 border-white/20` 
+                    : `bg-slate-800 text-slate-300 border border-slate-700 hover:border-slate-500`;
+                const avatarImgHtml = s.avatar 
+                    ? `<img class="w-6 h-6 rounded-full object-cover mr-1" src="${s.avatar}" alt="Avatar">` 
+                    : `<span class="mr-1 text-xs">👤</span>`;
+                container.innerHTML += `
+                    <div 
+                        onclick="switchStudent('${s.id}')"
+                        ondblclick="openStudentEditModal('${s.id}')"
+                        class="flex items-center gap-1 ${pillClass} px-3 py-1.5 rounded-xl font-bold text-sm cursor-pointer select-none transition-all hover:scale-105 animate-fade-in"
+                        title="Μονό κλικ: Εμφάνιση | Διπλό κλικ: Επεξεργασία">
+                        ${avatarImgHtml}
+                        <span class="max-w-[120px] truncate">${s.name}</span>
+                        <button onclick="event.stopPropagation(); openStudentEditModal('${s.id}')" class="ml-1 text-xs opacity-60 hover:opacity-100 hover:text-accent-hover no-print" title="Επεξεργασία">📝</button>
+                    </div>
+                `;
+            });
+        };
+
+        function updateHeaderDetails() {
+            const activeStudent = config.students.find(s => s.id === config.currentStudentId);
+            if (activeStudent) {
+                document.getElementById('studentName').value = activeStudent.name;
+                const photoContainer = document.getElementById('activeStudentHeaderPhotoContainer');
+                const photoImg = document.getElementById('activeStudentHeaderPhoto');
+                if (activeStudent.avatar) {
+                    photoImg.src = activeStudent.avatar;
+                    photoContainer.classList.remove('hidden');
+                } else {
+                    photoContainer.classList.add('hidden');
+                }
+            }
+        }
+        window.updateHeaderDetails = updateHeaderDetails;
+
+        window.autoSave = function() {
+            const newName = document.getElementById('studentName').value.trim();
+            const student = config.students.find(s => s.id === config.currentStudentId);
+            if (student && newName) {
+                student.name = newName;
+                renderStudentPills();
+                autoSaveToFirebase();
+            }
+        };
+
+        window.addHour = function() {
+            saveUndoState();
+            currentTimes.push('13:00');
+            renderGrid();
+            autoSaveToFirebase();
+            showToast("Προστέθηκε νέα ώρα!", "⏱️");
+        };
+
+        window.deleteHour = function(index) {
+            openConfirm(
+                "Διαγραφή Ώρας;",
+                `Θέλετε σίγουρα να διαγράψετε την ${index + 1}η ώρα και όλο το περιεχόμενό της;`,
+                "⏱️",
+                "Διαγραφή",
+                () => {
+                    saveUndoState();
+                    const studentId = config.currentStudentId;
+                    for (let col = 1; col <= 5; col++) {
+                        delete currentCells[`${studentId}_${index}_${col}`];
+                        for (let r = index + 1; r < currentTimes.length; r++) {
+                            const oldKey = `${studentId}_${r}_${col}`;
+                            const newKey = `${studentId}_${r - 1}_${col}`;
+                            if (currentCells[oldKey]) {
+                                currentCells[newKey] = currentCells[oldKey];
+                                delete currentCells[oldKey];
+                            }
+                        }
+                    }
+                    currentTimes.splice(index, 1);
+                    renderGrid();
+                    autoSaveToFirebase();
+                    showToast("Η ώρα διαγράφηκε.", "🗑️");
+                }
+            );
+        };
+
+        window.clearCurrentBoardRequest = function() {
+            openConfirm(
+                "Εκκαθάριση Προγράμματος;",
+                "Θέλετε να καθαρίσετε όλα τα κελιά αυτού του μαθητή;",
+                "🗑️",
+                "Εκκαθάριση",
+                () => {
+                    saveUndoState();
+                    const prefix = `${config.currentStudentId}_`;
+                    Object.keys(currentCells).forEach(key => {
+                        if (key.startsWith(prefix)) {
+                            delete currentCells[key];
+                        }
+                    });
+                    renderGrid();
+                    autoSaveToFirebase();
+                    showToast("Το πρόγραμμα καθαρίστηκε!", "🗑️");
+                }
+            );
+        };
+
+        window.manualSave = function() {
+            autoSaveToFirebase();
+            showToast("Το πρόγραμμα αποθηκεύτηκε στο cloud!", "💾");
+        };
+
+        window.saveUndoState = function() {
+            const state = {
+                currentTimes: JSON.parse(JSON.stringify(currentTimes)),
+                currentCells: JSON.parse(JSON.stringify(currentCells)),
+                config: JSON.parse(JSON.stringify(config))
+            };
+            undoStack.push(state);
+            if (undoStack.length > 20) undoStack.shift();
+            document.getElementById('undoBtn').disabled = false;
+        };
+
+        window.undo = function() {
+            if (undoStack.length === 0) return;
+            const previousState = undoStack.pop();
+            currentTimes = previousState.currentTimes;
+            currentCells = previousState.currentCells;
+            config = previousState.config;
+            document.documentElement.style.setProperty('--accent', config.accentHex || '#6366f1');
+            document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
+            document.documentElement.style.setProperty('--bg-app', config.bgApp || '#0f172a');
+            document.documentElement.style.setProperty('--bg-card', config.bgCard || '#1e293b');
+            if (config.appTitle) {
+                document.getElementById('appTitle').innerText = config.appTitle;
+            }
+            renderStudentPills();
+            renderCustomStamps();
+            renderGrid();
+            updateHeaderDetails();
+            autoSaveToFirebase();
+            if (undoStack.length === 0) {
+                document.getElementById('undoBtn').disabled = true;
+            }
+            showToast("Έγινε αναίρεση!", "↩️");
+        };
+
+        // -------------------- CUSTOM STAMPS (με ImgBB) --------------------
+        window.openStampCreatorModal = function() {
+            document.getElementById('stampInputText').value = '';
+            document.getElementById('stampInputBg').value = '#1e3a8a';
+            document.getElementById('stampInputColor').value = '#93c5fd';
+            const fileInput = document.getElementById('stampImageUploadInput');
+            fileInput.value = '';
+            tempStampImageFile = null;
+            if (tempStampPreviewURL) {
+                URL.revokeObjectURL(tempStampPreviewURL);
+                tempStampPreviewURL = null;
+            }
+            document.getElementById('stampImagePreview').classList.add('hidden');
+            document.getElementById('stampImagePlaceholder').classList.remove('hidden');
+            document.getElementById('stampImagePreview').src = '';
+            document.getElementById('stampCreatorModal').classList.remove('hidden');
+        };
+
+        window.closeStampCreatorModal = function() {
+            document.getElementById('stampCreatorModal').classList.add('hidden');
+        };
+
+        window.handleStampImageUpload = function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                tempStampImageFile = file;
+                if (tempStampPreviewURL) {
+                    URL.revokeObjectURL(tempStampPreviewURL);
+                }
+                tempStampPreviewURL = URL.createObjectURL(file);
+                const previewImg = document.getElementById('stampImagePreview');
+                previewImg.src = tempStampPreviewURL;
+                previewImg.classList.remove('hidden');
+                document.getElementById('stampImagePlaceholder').classList.add('hidden');
+            }
+        };
+
+        window.removeStampImagePreview = function() {
+            const fileInput = document.getElementById('stampImageUploadInput');
+            fileInput.value = '';
+            tempStampImageFile = null;
+            if (tempStampPreviewURL) {
+                URL.revokeObjectURL(tempStampPreviewURL);
+                tempStampPreviewURL = null;
+            }
+            document.getElementById('stampImagePreview').classList.add('hidden');
+            document.getElementById('stampImagePlaceholder').classList.remove('hidden');
+            document.getElementById('stampImagePreview').src = '';
+        };
+
+        window.saveCreatedStamp = async function() {
+            saveUndoState();
+            const text = document.getElementById('stampInputText').value.trim();
+            const bg = document.getElementById('stampInputBg').value;
+            const textColor = document.getElementById('stampInputColor').value;
+            if (!text) {
+                showToast("Παρακαλώ εισάγετε όνομα σφραγίδας!", "⚠️");
+                return;
+            }
+
+            let imageUrl = '';
+            if (tempStampImageFile) {
+                showToast("Ανέβασμα εικόνας...", "⏳");
+                const url = await uploadImageToImgBB(tempStampImageFile);
+                if (url) {
+                    imageUrl = url;
+                } else {
+                    showToast("Το ανέβασμα απέτυχε, η σφραγίδα θα δημιουργηθεί χωρίς εικόνα.", "⚠️");
+                }
+            }
+
+            const newStamp = {
+                id: 'stamp_' + Date.now(),
+                text: text,
+                bg: bg,
+                textColor: textColor,
+                img: imageUrl,
+                imgWidth: 48,
+                fontSize: 14
+            };
+
+            config.customStamps.push(newStamp);
+            renderCustomStamps();
+            closeStampCreatorModal();
+            autoSaveToFirebase();
+            showToast("Η σφραγίδα δημιουργήθηκε!", "🎨");
+            tempStampImageFile = null;
+            if (tempStampPreviewURL) {
+                URL.revokeObjectURL(tempStampPreviewURL);
+                tempStampPreviewURL = null;
+            }
+        };
+
+        window.deleteStamp = function(stampId) {
+            saveUndoState();
+            config.customStamps = config.customStamps.filter(s => s.id !== stampId);
+            if (activeStamp && activeStamp.id === stampId) {
+                activeStamp = null;
+            }
+            renderCustomStamps();
+            autoSaveToFirebase();
+            showToast("Η σφραγίδα διαγράφηκε.", "🗑️");
+        };
+
+        window.selectStamp = function(stampId) {
+            if (activeStamp && activeStamp.id === stampId) {
+                activeStamp = null;
+                document.querySelectorAll('.stamp-btn').forEach(btn => btn.classList.remove('ring-4', 'ring-white'));
+                showToast("Η σφραγίδα απενεργοποιήθηκε", "✏️");
+            } else {
+                const stamp = config.customStamps.find(s => s.id === stampId);
+                if (stamp) {
+                    activeStamp = stamp;
+                    document.querySelectorAll('.stamp-btn').forEach(btn => btn.classList.remove('ring-4', 'ring-white'));
+                    const targetBtn = document.getElementById(`btn-${stampId}`);
+                    if (targetBtn) targetBtn.classList.add('ring-4', 'ring-white');
+                    showToast(`Ενεργή σφραγίδα: ${stamp.text}`, "✏️");
+                }
+            }
+        };
+
+        window.renderCustomStamps = function() {
+            const container = document.getElementById('customStampsContainer');
+            container.innerHTML = '';
+            if (!config.customStamps || config.customStamps.length === 0) {
+                container.innerHTML = `<span class="text-xs text-slate-500">Δεν υπάρχουν ακόμη δικές σας σφραγίδες. Δημιουργήστε μία!</span>`;
+                return;
+            }
+
+            config.customStamps.forEach(s => {
+                const imgTag = s.img ? `<img src="${s.img}" class="w-4 h-4 object-contain inline rounded"> ` : '';
+                const activeRing = (activeStamp && activeStamp.id === s.id) ? 'ring-4 ring-white' : '';
+                container.innerHTML += `
+                    <div id="wrapper-${s.id}" class="flex items-center gap-1 bg-slate-900/80 p-1.5 rounded-xl border border-slate-700/60 transition-all hover:scale-105">
+                        <button 
+                            id="btn-${s.id}" 
+                            onclick="selectStamp('${s.id}')"
+                            style="background-color: ${s.bg}; color: ${s.textColor};"
+                            class="stamp-btn ${activeRing} px-3 py-1.5 rounded-lg text-xs font-extrabold shadow-sm transition-all flex items-center gap-1">
+                            ${imgTag}
+                            ${s.text}
+                        </button>
+                        <button onclick="deleteStamp('${s.id}')" class="text-xs opacity-50 hover:opacity-100 hover:text-red-500 px-1 transition-colors" title="Διαγραφή σφραγίδας">✕</button>
+                    </div>
+                `;
+            });
+        };
+
+        // -------------------- STUDENT AVATAR (με ImgBB) --------------------
+        window.openStudentEditModal = function(studentId) {
+            const student = config.students.find(s => s.id === studentId);
+            if (!student) return;
+            document.getElementById('editStudentId').value = student.id;
+            document.getElementById('editStudentName').value = student.name;
+            tempAvatarFile = null;
+            if (tempAvatarPreviewURL) {
+                URL.revokeObjectURL(tempAvatarPreviewURL);
+                tempAvatarPreviewURL = null;
+            }
+            const preview = document.getElementById('editStudentAvatarPreview');
+            if (student.avatar) {
+                preview.src = student.avatar;
+            } else {
+                preview.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'/></svg>";
+            }
+            document.getElementById('studentEditModal').classList.remove('hidden');
+        };
+
+        window.closeStudentEditModal = function() {
+            document.getElementById('studentEditModal').classList.add('hidden');
+            if (tempAvatarPreviewURL) {
+                URL.revokeObjectURL(tempAvatarPreviewURL);
+                tempAvatarPreviewURL = null;
+            }
+        };
+
+        window.handleStudentAvatarUpload = function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                tempAvatarFile = file;
+                if (tempAvatarPreviewURL) {
+                    URL.revokeObjectURL(tempAvatarPreviewURL);
+                }
+                tempAvatarPreviewURL = URL.createObjectURL(file);
+                document.getElementById('editStudentAvatarPreview').src = tempAvatarPreviewURL;
+            }
+        };
+
+        window.removeStudentAvatar = function() {
+            tempAvatarFile = null;
+            if (tempAvatarPreviewURL) {
+                URL.revokeObjectURL(tempAvatarPreviewURL);
+                tempAvatarPreviewURL = null;
+            }
+            document.getElementById('editStudentAvatarPreview').src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'/></svg>";
+        };
+
+        window.saveStudentEdit = async function() {
+            saveUndoState();
+            const id = document.getElementById('editStudentId').value;
+            const name = document.getElementById('editStudentName').value.trim();
+            if (!name) {
+                showToast("Το όνομα δεν μπορεί να είναι κενό!", "⚠️");
+                return;
+            }
+            const student = config.students.find(s => s.id === id);
+            if (student) {
+                student.name = name;
+                if (tempAvatarFile) {
+                    showToast("Ανέβασμα φωτογραφίας...", "⏳");
+                    const url = await uploadImageToImgBB(tempAvatarFile);
+                    if (url) {
+                        student.avatar = url;
+                    } else {
+                        showToast("Το ανέβασμα απέτυχε, η φωτογραφία δεν άλλαξε.", "⚠️");
+                    }
+                } else if (tempAvatarFile === null && student.avatar) {
+                    student.avatar = '';
+                }
+                const preview = document.getElementById('editStudentAvatarPreview');
+                if (preview.src.includes('svg') && !tempAvatarFile) {
+                    student.avatar = '';
+                }
+                renderStudentPills();
+                updateHeaderDetails();
+                closeStudentEditModal();
+                autoSaveToFirebase();
+                showToast("Τα στοιχεία του μαθητή ενημερώθηκαν!", "👤");
+            }
+        };
+
+        window.deleteStudentFromEdit = function() {
+            const id = document.getElementById('editStudentId').value;
+            if (config.students.length <= 1) {
+                showToast("Πρέπει να υπάρχει τουλάχιστον ένας μαθητής!", "⚠️");
+                return;
+            }
+            openConfirm(
+                "Διαγραφή Μαθητή;",
+                "Όλα τα δεδομένα αυτού του μαθητή θα διαγραφούν οριστικά.",
+                "🗑️",
+                "Διαγραφή",
+                () => {
+                    saveUndoState();
+                    const prefix = `${id}_`;
+                    Object.keys(currentCells).forEach(key => {
+                        if (key.startsWith(prefix)) delete currentCells[key];
+                    });
+                    config.students = config.students.filter(s => s.id !== id);
+                    if (config.currentStudentId === id) {
+                        config.currentStudentId = config.students[0].id;
+                    }
+                    closeStudentEditModal();
+                    renderStudentPills();
+                    renderGrid();
+                    updateHeaderDetails();
+                    autoSaveToFirebase();
+                    showToast("Ο μαθητής διαγράφηκε.", "🗑️");
+                }
+            );
+        };
+
+        // -------------------- CELL INTERACTIONS --------------------
+        // Γρήγορη τοπική αλλαγή μεγέθους (χωρίς αποθήκευση)
+        window.changeCellImageWidthLocal = function(row, col, width) {
+            const imgEl = document.getElementById(`img-${row}-${col}`);
+            if (imgEl) {
+                imgEl.style.width = `${width}px`;
+            }
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            if (currentCells[cellKey]) {
+                currentCells[cellKey].imgWidth = parseInt(width, 10);
+            }
+        };
+
+        const debouncedSaveCellWidth = debounce(function(row, col, width) {
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            if (currentCells[cellKey]) {
+                currentCells[cellKey].imgWidth = parseInt(width, 10);
+                autoSaveToFirebase();
+            }
+        }, 300);
+
+        window.saveCellImageWidth = function(row, col, width) {
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            if (currentCells[cellKey]) {
+                currentCells[cellKey].imgWidth = parseInt(width, 10);
+            }
+            debouncedSaveCellWidth(row, col, width);
+        };
+
+        window.changeCellImageWidth = function(row, col, width) {
+            window.changeCellImageWidthLocal(row, col, width);
+            window.saveCellImageWidth(row, col, width);
+        };
+
+        // -------------------- Η ΚΡΙΣΙΜΗ ΣΥΝΑΡΤΗΣΗ: handleCellClick με φωνή --------------------
+        window.handleCellClick = function(row, col) {
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            if (activeStamp) {
+                saveUndoState();
+                currentCells[cellKey] = {
+                    text: activeStamp.text,
+                    bg: activeStamp.bg,
+                    textColor: activeStamp.textColor,
+                    img: activeStamp.img || '',
+                    imgWidth: activeStamp.imgWidth || 48,
+                    fontSize: activeStamp.fontSize || 14
+                };
+                renderGrid();
+                autoSaveToFirebase();
+                // ΕΚΦΩΝΗΣΗ ΜΕ ΚΑΘΥΣΤΕΡΗΣΗ 400ms (για να ολοκληρωθεί το grid)
+                setTimeout(() => {
+                    speakGreek(activeStamp.text);
+                }, 400);
+                return;
+            }
+            if (activeSwapSourceId !== null) {
+                const targetId = `${row}_${col}`;
+                if (activeSwapSourceId !== targetId) {
+                    swapCellsInteractive(activeSwapSourceId, targetId);
+                } else {
+                    activeSwapSourceId = null;
+                    renderGrid();
+                    showToast("Η ανταλλαγή ακυρώθηκε.", "ℹ️");
+                }
+            }
+        };
+
+        window.handleCellInput = function(e, row, col) {
+            saveUndoState();
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            if (!currentCells[cellKey]) {
+                currentCells[cellKey] = { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
+            }
+            currentCells[cellKey].text = e.target.innerText;
+            autoSaveToFirebase();
+        };
+
+        window.clearSingleCell = function(row, col) {
+            saveUndoState();
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            delete currentCells[cellKey];
+            renderGrid();
+            autoSaveToFirebase();
+            showToast("Το κελί καθαρίστηκε.", "🗑️");
+        };
+
+        window.changeCellColor = function(row, col, bgHex, textHex) {
+            saveUndoState();
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            if (!currentCells[cellKey]) {
+                currentCells[cellKey] = { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
+            }
+            currentCells[cellKey].bg = bgHex;
+            currentCells[cellKey].textColor = textHex;
+            renderGrid();
+            autoSaveToFirebase();
+        };
+
+        window.changeCellFontSize = function(row, col, size) {
+            saveUndoState();
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            if (!currentCells[cellKey]) {
+                currentCells[cellKey] = { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
+            }
+            currentCells[cellKey].fontSize = parseInt(size, 10) || 14;
+            renderGrid();
+            autoSaveToFirebase();
+        };
+
+        window.handleCellImageUpload = async function(event, row, col) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const user = auth.currentUser;
+            if (!user) {
+                showToast("Πρέπει να είστε συνδεδεμένοι!", "⚠️");
+                return;
+            }
+            saveUndoState();
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            if (!currentCells[cellKey]) {
+                currentCells[cellKey] = { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
+            }
+            showToast("Ανέβασμα εικόνας στο ImgBB...", "⏳");
+            const url = await uploadImageToImgBB(file);
+            if (url) {
+                currentCells[cellKey].img = url;
+                currentCells[cellKey].imgWidth = currentCells[cellKey].imgWidth || 48;
+                renderGrid();
+                autoSaveToFirebase();
+                showToast("Η εικόνα προστέθηκε!", "📸");
+            } else {
+                showToast("Το ανέβασμα απέτυχε!", "❌");
+            }
+            event.target.value = '';
+        };
+
+        window.removeCellImage = function(row, col) {
+            saveUndoState();
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            if (currentCells[cellKey]) {
+                currentCells[cellKey].img = '';
+                renderGrid();
+                autoSaveToFirebase();
+                showToast("Η εικόνα αφαιρέθηκε.", "🗑️");
+            }
+        };
+
+        window.startInteractiveSwap = function(row, col) {
+            activeSwapSourceId = `${row}_${col}`;
+            renderGrid();
+            showToast("Επιλέξτε ένα άλλο κελί για ανταλλαγή!", "🔄");
+        };
+
+        function swapCellsInteractive(sourceId, targetId) {
+            saveUndoState();
+            const [sRow, sCol] = sourceId.split('_').map(Number);
+            const [tRow, tCol] = targetId.split('_').map(Number);
+            const sourceKey = `${config.currentStudentId}_${sRow}_${sCol}`;
+            const targetKey = `${config.currentStudentId}_${tRow}_${tCol}`;
+            const temp = currentCells[sourceKey];
+            if (currentCells[targetKey]) {
+                currentCells[sourceKey] = currentCells[targetKey];
+            } else {
+                delete currentCells[sourceKey];
+            }
+            if (temp) {
+                currentCells[targetKey] = temp;
+            } else {
+                delete currentCells[targetKey];
+            }
+            activeSwapSourceId = null;
+            renderGrid();
+            autoSaveToFirebase();
+            showToast("Τα κελιά ανταλλάχθηκαν!", "🔄");
+        }
+
+        window.handleDragStart = function(e, row, col) {
+            draggedCellId = `${row}_${col}`;
+            e.target.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        };
+        window.disableDrag = function(e) {
+            e.stopPropagation();
+        };
+        window.handleDragOver = function(e, cell) {
+            e.preventDefault();
+            cell.classList.add('drag-over');
+        };
+        window.handleDragLeave = function(e, cell) {
+            cell.classList.remove('drag-over');
+        };
+        window.handleDrop = function(e, row, col) {
+            e.preventDefault();
+            if (!draggedCellId) return;
+            const [sRow, sCol] = draggedCellId.split('_').map(Number);
+            if (sRow === row && sCol === col) return;
+            saveUndoState();
+            const sourceKey = `${config.currentStudentId}_${sRow}_${sCol}`;
+            const targetKey = `${config.currentStudentId}_${row}_${col}`;
+            const temp = currentCells[sourceKey];
+            if (currentCells[targetKey]) {
+                currentCells[sourceKey] = currentCells[targetKey];
+            } else {
+                delete currentCells[sourceKey];
+            }
+            if (temp) {
+                currentCells[targetKey] = temp;
+            } else {
+                delete currentCells[targetKey];
+            }
+            renderGrid();
+            autoSaveToFirebase();
+            showToast("Το μάθημα μετακινήθηκε!", "🔄");
+        };
+        window.handleDragEnd = function(e) {
+            e.target.classList.remove('dragging');
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('drag-over'));
+            draggedCellId = null;
+        };
+
+        // -------------------- TEXT TO SPEECH (ΧΩΡΙΣ CANCEL) --------------------
+        function speakGreek(text) {
+            if (!text || !('speechSynthesis' in window)) return;
+            // ΔΕΝ κάνουμε cancel – αφήνουμε την ομιλία να τρέξει
+            const utterance = new SpeechSynthesisUtterance(text.trim());
+            const voices = window.speechSynthesis.getVoices();
+            const greekVoice = voices.find(v => v.lang.startsWith('el'));
+            if (greekVoice) utterance.voice = greekVoice;
+            utterance.pitch = 1.0;
+            utterance.rate = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        window.speakCell = function(row, col) {
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            const cellData = currentCells[cellKey];
+            if (cellData && cellData.text && cellData.text.trim()) {
+                speakGreek(cellData.text);
+                showToast("Εκφώνηση μαθήματος...", "🔊");
+            } else {
+                showToast("Το κελί είναι άδειο!", "⚠️");
+            }
+        };
+
+        window.triggerPrint = function() {
+            try {
+                window.focus();
+                setTimeout(() => { window.print(); }, 200);
+            } catch (e) {
+                showToast("Η εκτύπωση μπλοκαρίστηκε.", "⚠️");
+            }
+        };
+
+        // -------------------- RENDER GRID (με γρήγορο slider) --------------------
+        window.renderGrid = function() {
+            console.log('🔄 renderGrid() κλήθηκε. currentTimes:', currentTimes);
+            const grid = document.getElementById('scheduleGrid');
+            if (!grid) {
+                console.error('❌ Το grid δεν βρέθηκε στο DOM!');
+                return;
+            }
+            grid.innerHTML = '';
+
+            if (!currentTimes || currentTimes.length === 0) {
+                console.warn('⚠️ currentTimes είναι κενό – χρησιμοποιώ defaultTimes');
+                currentTimes = [...defaultTimes];
+            }
+
+            const headers = ['Ώρα', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή'];
+            headers.forEach(h => {
+                grid.innerHTML += `
+                    <div class="bg-slate-900/80 p-4 rounded-2xl border border-slate-800 text-center font-black tracking-wider text-slate-300 text-xs sm:text-sm uppercase flex items-center justify-center">
+                        ${h}
+                    </div>
+                `;
+            });
+
+            currentTimes.forEach((time, rowIndex) => {
+                grid.innerHTML += `
+                    <div class="relative group bg-slate-900/60 p-4 rounded-2xl border border-slate-800 flex flex-col justify-center items-center text-center">
+                        <div 
+                            contenteditable="true" 
+                            onblur="saveUndoState(); currentTimes[${rowIndex}] = this.innerText; renderGrid(); autoSaveToFirebase();" 
+                            class="text-sm font-extrabold focus:outline-none focus:ring-1 focus:ring-accent px-1.5 py-0.5 rounded cursor-text">
+                            ${time}
+                        </div>
+                        <button 
+                            onclick="deleteHour(${rowIndex})" 
+                            class="absolute -top-1.5 -left-1.5 w-6 h-6 bg-red-600/90 text-white rounded-full text-xs font-bold hover:scale-110 opacity-0 group-hover:opacity-100 transition-all no-print flex items-center justify-center shadow-md"
+                            title="Διαγραφή ώρας">
+                            ✕
+                        </button>
+                    </div>
+                `;
+
+                for (let col = 1; col <= 5; col++) {
+                    const cellKey = `${config.currentStudentId}_${rowIndex}_${col}`;
+                    const cellData = currentCells[cellKey] || { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
+                    
+                    const cellBg = cellData.bg ? cellData.bg : 'var(--bg-card)';
+                    const cellColor = cellData.textColor ? cellData.textColor : '#f8fafc';
+                    const customBgStyle = cellData.bg ? `style="background-color: ${cellBg}; color: ${cellColor};"` : '';
+                    
+                    const cellImgWidth = cellData.imgWidth || 48;
+                    const cellFontSize = cellData.fontSize || 14;
+                    
+                    let imgHtml = '';
+                    if (cellData.img && cellData.img.trim() !== '') {
+                        imgHtml = `
+                            <div class="relative group/img flex flex-col items-center w-full">
+                                <img id="img-${rowIndex}-${col}" src="${cellData.img}" style="width: ${cellImgWidth}px;" class="preview-img max-h-[100px]" alt="Image">
+                                <button onclick="event.stopPropagation(); removeCellImage(${rowIndex}, ${col})" class="absolute top-0 right-0 bg-red-600 hover:bg-red-500 text-white text-[9px] px-1.5 rounded-full opacity-100 transition-opacity no-print" title="Αφαίρεση εικόνας">✕</button>
+                                <div class="w-full mt-2 no-print cell-slider-container flex items-center gap-1 bg-slate-950/90 p-1.5 rounded-lg border border-slate-800" onmousedown="disableDrag(event)" onclick="event.stopPropagation()">
+                                    <span class="text-[9px] text-slate-400 font-bold">↔️</span>
+                                    <input 
+                                        type="range" 
+                                        min="20" 
+                                        max="150" 
+                                        value="${cellImgWidth}" 
+                                        oninput="changeCellImageWidthLocal(${rowIndex}, ${col}, this.value)" 
+                                        onchange="saveCellImageWidth(${rowIndex}, ${col}, this.value)"
+                                        class="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        imgHtml = `
+                            <div class="no-print flex flex-col items-center gap-1.5 w-full">
+                                <button onclick="event.stopPropagation(); document.getElementById('file-${rowIndex}-${col}').click();" class="text-[11px] bg-slate-800/80 hover:bg-slate-700 hover:text-white text-slate-300 font-bold px-3 py-1.5 rounded-xl border border-slate-700/60 flex items-center gap-1.5 w-full justify-center transition-all" title="Εισαγωγή εικόνας">
+                                    <span>🖼️</span> Φόρτωση
+                                </button>
+                                <input type="file" id="file-${rowIndex}-${col}" class="hidden" accept="image/*" onchange="handleCellImageUpload(event, ${rowIndex}, ${col})">
+                            </div>
+                        `;
+                    }
+                    
+                    const isSwapSource = activeSwapSourceId === `${rowIndex}_${col}` ? 'active-swap-source' : '';
+
+                    grid.innerHTML += `
+                        <div 
+                            draggable="true"
+                            ondragstart="handleDragStart(event, ${rowIndex}, ${col})"
+                            ondragover="handleDragOver(event, this)"
+                            ondragleave="handleDragLeave(event, this)"
+                            ondrop="handleDrop(event, ${rowIndex}, ${col})"
+                            ondragend="handleDragEnd(event)"
+                            onclick="handleCellClick(${rowIndex}, ${col})"
+                            ${customBgStyle}
+                            class="cell ${isSwapSource} p-3 text-center flex flex-col justify-between relative group hover:scale-[1.01] hover:shadow-lg hover:border-slate-600 border border-transparent cursor-pointer overflow-hidden animate-fade-in">
+                            
+                            <div class="w-full flex flex-wrap items-center justify-between gap-1 mb-2 bg-slate-950/80 p-1.5 rounded-xl border border-slate-800/80 no-print" onmousedown="disableDrag(event)" onclick="event.stopPropagation()">
+                                <div class="flex items-center gap-1">
+                                    <input 
+                                        type="color" 
+                                        value="${rgbToHex(cellBg)}" 
+                                        onchange="changeCellColor(${rowIndex}, ${col}, this.value, '${rgbToHex(cellColor)}')" 
+                                        title="Χρώμα φόντου"
+                                        class="w-5 h-5 cursor-pointer">
+                                    <input 
+                                        type="color" 
+                                        value="${rgbToHex(cellColor)}" 
+                                        onchange="changeCellColor(${rowIndex}, ${col}, '${rgbToHex(cellBg)}', this.value)" 
+                                        title="Χρώμα γραμματοσειράς"
+                                        class="w-5 h-5 cursor-pointer">
+                                    <span class="text-[9px] font-bold text-slate-400 ml-0.5">Px:</span>
+                                    <input 
+                                        type="number" 
+                                        min="10" 
+                                        max="36" 
+                                        value="${cellFontSize}" 
+                                        onchange="changeCellFontSize(${rowIndex}, ${col}, this.value)" 
+                                        class="w-8 text-[10px] text-center font-bold bg-slate-900 border border-slate-700 rounded text-white py-0.5">
+                                </div>
+                                
+                                <div class="flex items-center gap-0.5">
+                                    <button onclick="event.stopPropagation(); speakCell(${rowIndex}, ${col})" class="p-1 bg-indigo-900/90 hover:bg-indigo-800 text-white rounded text-[10px]" title="Εκφώνηση">🔊</button>
+                                    <button onclick="event.stopPropagation(); startInteractiveSwap(${rowIndex}, ${col})" class="p-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[10px]" title="Ανταλλαγή">🔄</button>
+                                    <button onclick="event.stopPropagation(); clearSingleCell(${rowIndex}, ${col})" class="p-1 bg-red-600/90 hover:bg-red-600 text-white rounded text-[10px]" title="Καθαρισμός">🗑️</button>
+                                </div>
+                            </div>
+
+                            <div class="w-full mb-2">
+                                <span class="text-[9px] uppercase font-bold text-slate-400 block mb-0.5 text-left pl-1">Μάθημα:</span>
+                                <div 
+                                    id="text-${rowIndex}-${col}"
+                                    contenteditable="true"
+                                    onblur="handleCellInput(event, ${rowIndex}, ${col})"
+                                    style="font-size: ${cellFontSize}px;"
+                                    class="editable font-extrabold whitespace-pre-line focus:outline-none p-1.5 bg-slate-950/45 border border-slate-800 rounded-xl cursor-text min-h-[36px] max-h-[64px] overflow-y-auto text-center">
+                                    ${cellData.text}
+                                </div>
+                            </div>
+
+                            <div class="flex-1 flex flex-col justify-center items-center w-full bg-slate-900/30 p-2 rounded-xl border border-slate-800/40 my-1 min-h-[110px]">
+                                ${imgHtml}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        };
+
+        // -------------------- ΑΥΤΟΜΑΤΗ ΑΠΟΣΥΝΔΕΣΗ --------------------
+        window.addEventListener('beforeunload', () => {
+            signOut(auth).catch(() => {});
+        });
+
+        console.log('✅ ClassFlow – Slider γρήγορο, σφραγίδες με φωνή (με καθυστέρηση)!');
+    </script>
+</body>
+</html>
