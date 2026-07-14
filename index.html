@@ -79,7 +79,10 @@
         .animate-fade-in {
             animation: fadeIn 0.25s ease-out forwards;
         }
+
+        /* ---------- ΑΛΛΑΓΕΣ ΣΤΗΝ ΕΚΤΥΠΩΣΗ ---------- */
         @media print {
+            /* Default: ασπρόμαυρη εκτύπωση (διατηρείται η υπάρχουσα συμπεριφορά) */
             body { background: white !important; color: black !important; padding: 0 !important; }
             header, .no-print, button, input, select, .group-hover\:opacity-100, .stamp-container, .cell-slider-container { display: none !important; }
             .cell { 
@@ -95,7 +98,36 @@
              }
             .editable { color: #000000 !important; }
             .preview-img { max-height: 110px !important; }
+
+            /* Αν το body έχει την κλάση print-color, διατηρούμε τα χρώματα */
+            body.print-color {
+                background: initial !important;
+                color: initial !important;
+            }
+            body.print-color .cell {
+                background-color: var(--bg-card) !important;
+                border: 2px solid var(--bg-card) !important;
+                color: initial !important;
+            }
+            body.print-color .editable {
+                color: initial !important;
+            }
+            body.print-color .cell * {
+                color: inherit !important;
+            }
+            body.print-color .preview-img {
+                max-height: 110px !important;
+            }
+            /* Διατηρούμε τα χρώματα φόντου και κειμένου για κάθε κελί */
+            body.print-color .cell[style*="background-color"] {
+                background-color: var(--cell-bg, initial) !important;
+            }
+            body.print-color .cell[style*="color"] {
+                color: var(--cell-color, initial) !important;
+            }
         }
+        /* ------------------------------------------- */
+
         /* Login form styles */
         #login-form {
             max-width: 380px;
@@ -200,7 +232,7 @@
                 <div id="customStampsContainer" class="flex flex-wrap gap-2 justify-center"></div>
             </div>
                         
-            <!-- Quick Toolbar -->
+            <!-- Quick Toolbar (προσθήκη checkbox για έγχρωμη εκτύπωση) -->
             <div class="flex flex-wrap justify-between items-center gap-4 bg-slate-800/80 p-4 rounded-2xl shadow-xl border border-slate-700">
                 <div class="flex items-center gap-3">
                     <span class="text-slate-400 font-bold text-sm">Πρόγραμμα:</span>
@@ -209,7 +241,7 @@
                     </div>
                     <input type="text" id="studentName" placeholder="Όνομα Μαθητή..." onfocus="saveUndoState()" oninput="autoSave()" class="text-lg px-3 py-1.5 bg-slate-900 focus:outline-none border-b-2 border-accent rounded-lg font-bold text-white w-56">
                 </div>
-                <div class="flex flex-wrap gap-2">
+                <div class="flex flex-wrap gap-2 items-center">
                     <button onclick="addHour()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm flex items-center gap-1">
                         ⏱️ + Ώρα
                     </button>
@@ -222,6 +254,11 @@
                     <button onclick="clearCurrentBoardRequest()" class="bg-red-600/80 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm">
                         🗑️ Εκκαθάριση
                     </button>
+                    <!-- Νέο checkbox για έγχρωμη εκτύπωση -->
+                    <label class="flex items-center gap-1 bg-slate-700/60 px-3 py-2 rounded-xl cursor-pointer text-sm font-bold text-slate-300">
+                        <input type="checkbox" id="printColorCheck" class="w-4 h-4 accent-accent"> 
+                        <span>🌈 Έγχρωμη</span>
+                    </label>
                     <button onclick="triggerPrint()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm flex items-center gap-1">
                         🖨️ Εκτύπωση
                     </button>
@@ -1180,8 +1217,10 @@
             const cellKey = `${config.currentStudentId}_${row}_${col}`;
             if (activeStamp) {
                 saveUndoState();
+                // Βεβαιωνόμαστε ότι το κείμενο της σφραγίδας υπάρχει
+                const stampText = activeStamp.text || '';
                 currentCells[cellKey] = {
-                    text: activeStamp.text,
+                    text: stampText,
                     bg: activeStamp.bg,
                     textColor: activeStamp.textColor,
                     img: activeStamp.img || '',
@@ -1192,7 +1231,7 @@
                 autoSaveToFirebase();
                 // ΕΚΦΩΝΗΣΗ ΜΕ ΚΑΘΥΣΤΕΡΗΣΗ 400ms (για να ολοκληρωθεί το grid)
                 setTimeout(() => {
-                    speakGreek(activeStamp.text);
+                    speakGreek(stampText);
                 }, 400);
                 return;
             }
@@ -1385,12 +1424,24 @@
             }
         };
 
+        // -------------------- ΕΚΤΥΠΩΣΗ ΜΕ ΕΠΙΛΟΓΗ ΧΡΩΜΑΤΟΣ --------------------
         window.triggerPrint = function() {
+            const printColor = document.getElementById('printColorCheck').checked;
+            if (printColor) {
+                document.body.classList.add('print-color');
+            } else {
+                document.body.classList.remove('print-color');
+            }
             try {
                 window.focus();
-                setTimeout(() => { window.print(); }, 200);
+                setTimeout(() => { 
+                    window.print(); 
+                    // Αφαιρούμε την κλάση μετά το print (για να μην μείνει)
+                    document.body.classList.remove('print-color');
+                }, 200);
             } catch (e) {
                 showToast("Η εκτύπωση μπλοκαρίστηκε.", "⚠️");
+                document.body.classList.remove('print-color');
             }
         };
 
@@ -1530,7 +1581,7 @@
                                     onblur="handleCellInput(event, ${rowIndex}, ${col})"
                                     style="font-size: ${cellFontSize}px;"
                                     class="editable font-extrabold whitespace-pre-line focus:outline-none p-1.5 bg-slate-950/45 border border-slate-800 rounded-xl cursor-text min-h-[36px] max-h-[64px] overflow-y-auto text-center">
-                                    ${cellData.text}
+                                    ${cellData.text || ''}
                                 </div>
                             </div>
 
