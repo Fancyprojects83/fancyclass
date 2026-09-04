@@ -82,7 +82,6 @@
 
         /* ---------- ΑΛΛΑΓΕΣ ΣΤΗΝ ΕΚΤΥΠΩΣΗ ---------- */
         @media print {
-            /* Default: ασπρόμαυρη εκτύπωση (διατηρείται η υπάρχουσα συμπεριφορά) */
             body { background: white !important; color: black !important; padding: 0 !important; }
             header, .no-print, button, input, select, .group-hover\:opacity-100, .stamp-container, .cell-slider-container { display: none !important; }
             .cell { 
@@ -99,7 +98,6 @@
             .editable { color: #000000 !important; }
             .preview-img { max-height: 110px !important; }
 
-            /* Αν το body έχει την κλάση print-color, διατηρούμε τα χρώματα */
             body.print-color {
                 background: initial !important;
                 color: initial !important;
@@ -118,7 +116,6 @@
             body.print-color .preview-img {
                 max-height: 110px !important;
             }
-            /* Διατηρούμε τα χρώματα φόντου και κειμένου για κάθε κελί */
             body.print-color .cell[style*="background-color"] {
                 background-color: var(--cell-bg, initial) !important;
             }
@@ -216,7 +213,7 @@
             <div class="flex flex-wrap justify-center items-center gap-3 mb-6 bg-slate-900/60 p-4 rounded-3xl border border-slate-800 backdrop-blur">
                 <span class="text-slate-400 font-bold text-sm mr-2">ΜΑΘΗΤΕΣ:</span>
                 <div id="studentSelector" class="flex flex-wrap gap-2"></div>
-                <button onclick="createNewStudent()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black transition-all shadow-md text-sm flex items-center gap-1">
+                <button onclick="openStudentCreatorModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black transition-all shadow-md text-sm flex items-center gap-1">
                     ➕ Νέος Μαθητής
                 </button>
             </div>
@@ -229,10 +226,10 @@
                         ➕ Δημιουργία Σφραγίδας
                     </button>
                 </div>
-                <div id="customStampsContainer" class="flex flex-wrap gap-2 justify-center"></div>
+                <div id="customStampsContainer" class="flex flex-wrap gap-2.5 justify-center"></div>
             </div>
                         
-            <!-- Quick Toolbar (προσθήκη checkbox για έγχρωμη εκτύπωση) -->
+            <!-- Quick Toolbar -->
             <div class="flex flex-wrap justify-between items-center gap-4 bg-slate-800/80 p-4 rounded-2xl shadow-xl border border-slate-700">
                 <div class="flex items-center gap-3">
                     <span class="text-slate-400 font-bold text-sm">Πρόγραμμα:</span>
@@ -248,13 +245,9 @@
                     <button id="undoBtn" onclick="undo()" class="bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-200 px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm disabled:cursor-not-allowed">
                         ↩️ Αναίρεση
                     </button>
-                    <button onclick="manualSave()" class="bg-accent hover:bg-accent-hover text-white px-5 py-2.5 rounded-xl font-black transition-all shadow-md text-sm">
-                        💾 Αποθήκευση
-                    </button>
                     <button onclick="clearCurrentBoardRequest()" class="bg-red-600/80 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm">
                         🗑️ Εκκαθάριση
                     </button>
-                    <!-- Νέο checkbox για έγχρωμη εκτύπωση -->
                     <label class="flex items-center gap-1 bg-slate-700/60 px-3 py-2 rounded-xl cursor-pointer text-sm font-bold text-slate-300">
                         <input type="checkbox" id="printColorCheck" class="w-4 h-4 accent-accent"> 
                         <span>🌈 Έγχρωμη</span>
@@ -269,7 +262,7 @@
         <!-- SCHEDULE GRID -->
         <div id="scheduleGrid" class="grid grid-cols-6 gap-3"></div>
 
-        <!-- MODALS (unchanged) -->
+        <!-- MODALS -->
         <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print">
             <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                 <h3 class="text-xl font-black mb-6 flex items-center gap-2">⚙️ Ρυθμίσεις Εμφάνισης</h3>
@@ -339,13 +332,71 @@
             </div>
         </div>
 
+        <div id="studentCreatorModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print">
+            <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+                <h3 class="text-xl font-black mb-4 flex items-center gap-2">👤 Δημιουργία Μαθητή</h3>
+                <div class="mb-4">
+                    <label class="block text-slate-400 text-sm font-bold mb-2">Όνομα Μαθητή:</label>
+                    <input type="text" id="studentInputText" placeholder="π.χ. Μαρία..." class="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl font-bold text-white focus:outline-none focus:border-accent">
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-slate-400 text-xs font-bold mb-1">Χρώμα Φόντου:</label>
+                        <div class="flex items-center gap-2 bg-slate-900 p-2.5 rounded-xl border border-slate-700">
+                            <input type="color" id="studentInputBg" value="#1e3a8a">
+                            <span class="text-slate-300 text-sm font-mono text-center">Επιλογή</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 text-xs font-bold mb-1">Χρώμα Κειμένου:</label>
+                        <div class="flex items-center gap-2 bg-slate-900 p-2.5 rounded-xl border border-slate-700">
+                            <input type="color" id="studentInputColor" value="#93c5fd">
+                            <span class="text-slate-300 text-sm font-mono text-center">Επιλογή</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-5 bg-slate-900/40 p-4 rounded-2xl border border-slate-700/60 flex flex-col items-center">
+                    <label class="block text-slate-300 text-sm font-bold mb-2 self-start">Φωτογραφία Μαθητή (Προαιρετικό):</label>
+                    <div class="relative w-20 h-20 mb-3 bg-slate-950/60 rounded-full flex items-center justify-center overflow-hidden border border-slate-700">
+                        <img id="studentImagePreview" class="hidden w-full h-full object-cover" src="" alt="Student preview">
+                        <span id="studentImagePlaceholder" class="text-2xl text-slate-600">👤</span>
+                    </div>
+                    <div class="flex gap-2 w-full justify-center">
+                        <input type="file" id="studentImageUploadInput" class="hidden" accept="image/*" onchange="handleStudentImageUpload(event)">
+                        <button onclick="document.getElementById('studentImageUploadInput').click()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all">📸 Φόρτωση</button>
+                        <button onclick="removeStudentImagePreview()" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold transition-all">✕ Διαγραφή</button>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button onclick="closeStudentCreatorModal()" class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-sm">Ακύρωση</button>
+                    <button onclick="saveCreatedStudent()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-black text-sm text-white">Προσθήκη</button>
+                </div>
+            </div>
+        </div>
+
         <div id="studentEditModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print">
             <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                 <h3 class="text-xl font-black mb-4 flex items-center gap-2">📝 Επεξεργασία Μαθητή</h3>
                 <input type="hidden" id="editStudentId">
-                <div class="mb-5">
+                <div class="mb-4">
                     <label class="block text-slate-400 text-sm font-bold mb-2">Όνομα Μαθητή:</label>
                     <input type="text" id="editStudentName" class="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl font-bold text-white focus:outline-none focus:border-accent">
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-slate-400 text-xs font-bold mb-1">Χρώμα Φόντου:</label>
+                        <div class="flex items-center gap-2 bg-slate-900 p-2.5 rounded-xl border border-slate-700">
+                            <input type="color" id="editStudentBg" value="#1e3a8a">
+                            <span class="text-slate-300 text-sm font-mono text-center">Επιλογή</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 text-xs font-bold mb-1">Χρώμα Κειμένου:</label>
+                        <div class="flex items-center gap-2 bg-slate-900 p-2.5 rounded-xl border border-slate-700">
+                            <input type="color" id="editStudentColor" value="#93c5fd">
+                            <span class="text-slate-300 text-sm font-mono text-center">Επιλογή</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="mb-6 bg-slate-900/40 p-4 rounded-2xl border border-slate-700/60 flex flex-col items-center">
                     <label class="block text-slate-300 text-sm font-bold mb-3 self-start">Φωτογραφία Μαθητή:</label>
@@ -384,7 +435,7 @@
             <span id="toastIcon">✨</span> <span id="toastText">Έγινε!</span>
         </div>
 
-    </div> <!-- end app-content -->
+    </div>
 
     <!-- FIREBASE SDK -->
     <script type="importmap">
@@ -398,12 +449,10 @@
     </script>
 
     <script type="module">
-        // -------------------- FIREBASE IMPORTS --------------------
         import { initializeApp } from 'firebase/app';
         import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
         import { getDatabase, ref, set, get, onValue } from 'firebase/database';
 
-        // -------------------- YOUR FIREBASE CONFIG --------------------
         const firebaseConfig = {
           apiKey: "AIzaSyB7NlTY1__aJjyFDEa9hvGmQucntRoaf_g",
           authDomain: "fancyschedule-b6b37.firebaseapp.com",
@@ -414,12 +463,10 @@
           appId: "1:438208010686:web:94b1a971b1c7c7e37f81ef"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getDatabase(app);
 
-        // -------------------- DOM REFS FOR LOGIN --------------------
         const loginForm = document.getElementById('login-form');
         const appContent = document.getElementById('app-content');
         const emailInput = document.getElementById('email');
@@ -428,7 +475,6 @@
         const loginError = document.getElementById('login-error');
         const userEmailSpan = document.getElementById('user-email');
 
-        // -------------------- GLOBAL STATE --------------------
         let config = {
             appTitle: 'ClassFlow',
             currentStudentId: 's1',
@@ -450,6 +496,8 @@
         let activeSwapSourceId = null;
         let tempStampImageFile = null;
         let tempStampPreviewURL = null;
+        let tempStudentImageFile = null;
+        let tempStudentPreviewURL = null;
         let tempAvatarFile = null;
         let tempAvatarPreviewURL = null;
         let confirmCallback = null;
@@ -457,7 +505,6 @@
 
         const IMGBB_API_KEY = 'b1a8388f6b7c544529b95f37048a3c7e';
 
-        // Helper functions (rgbToHex, showToast, openConfirm)
         function rgbToHex(color) {
             if (!color || typeof color !== 'string') return '#1e293b';
             color = color.trim().toLowerCase();
@@ -511,7 +558,6 @@
             confirmCallback = null;
         };
 
-        // -------------------- IMGBB UPLOAD FUNCTION --------------------
         async function uploadImageToImgBB(file) {
             if (!file) return null;
             const formData = new FormData();
@@ -539,7 +585,6 @@
             }
         }
 
-        // -------------------- FIREBASE READ/WRITE FUNCTIONS --------------------
         function saveFullStateToFirebase(userId) {
             const payload = {
                 config: config,
@@ -558,7 +603,6 @@
             return get(stateRef).then((snapshot) => {
                 if (snapshot.exists()) {
                     const data = snapshot.val();
-                    console.log('📦 Δεδομένα φορτώθηκαν από Firebase:', data);
                     config = data.config || config;
                     if (!config.customStamps) config.customStamps = [];
                     if (!config.students) config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
@@ -574,7 +618,6 @@
                     }
                     return true;
                 } else {
-                    console.log('🆕 Πρώτη φορά χρήστη – χρησιμοποιώ default values');
                     currentTimes = [...defaultTimes];
                     currentCells = {};
                     config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
@@ -626,7 +669,6 @@
             });
         }
 
-        // Auto-save wrapper
         function autoSaveToFirebase() {
             const user = auth.currentUser;
             if (user) {
@@ -634,7 +676,6 @@
             }
         }
 
-        // Debounce helper για το slider
         function debounce(func, wait) {
             let timeout;
             return function(...args) {
@@ -643,7 +684,6 @@
             };
         }
 
-        // -------------------- LOGIN / LOGOUT --------------------
         loginBtn.addEventListener('click', () => {
             const email = emailInput.value.trim();
             const password = passwordInput.value.trim();
@@ -670,7 +710,6 @@
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                console.log('✅ Χρήστης συνδέθηκε:', user.email);
                 loginForm.style.display = 'none';
                 appContent.style.display = 'block';
                 userEmailSpan.textContent = user.email;
@@ -696,8 +735,6 @@
                 document.getElementById('undoBtn').disabled = true;
             }
         });
-
-        // -------------------- ΟΛΕΣ ΟΙ ΣΥΝΑΡΤΗΣΕΙΣ (με autoSave) --------------------
 
         window.saveAppTitle = function(text) {
             config.appTitle = text.trim() || 'ClassFlow';
@@ -742,52 +779,142 @@
             document.getElementById('settingsModal').classList.add('hidden');
         };
 
-        window.createNewStudent = function() {
+        window.openStudentCreatorModal = function() {
+            document.getElementById('studentInputText').value = '';
+            document.getElementById('studentInputBg').value = '#1e3a8a';
+            document.getElementById('studentInputColor').value = '#93c5fd';
+            const fileInput = document.getElementById('studentImageUploadInput');
+            fileInput.value = '';
+            tempStudentImageFile = null;
+            if (tempStudentPreviewURL) {
+                URL.revokeObjectURL(tempStudentPreviewURL);
+                tempStudentPreviewURL = null;
+            }
+            document.getElementById('studentImagePreview').classList.add('hidden');
+            document.getElementById('studentImagePlaceholder').classList.remove('hidden');
+            document.getElementById('studentImagePreview').src = '';
+            document.getElementById('studentCreatorModal').classList.remove('hidden');
+        };
+
+        window.closeStudentCreatorModal = function() {
+            document.getElementById('studentCreatorModal').classList.add('hidden');
+        };
+
+        window.handleStudentImageUpload = function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                tempStudentImageFile = file;
+                if (tempStudentPreviewURL) {
+                    URL.revokeObjectURL(tempStudentPreviewURL);
+                }
+                tempStudentPreviewURL = URL.createObjectURL(file);
+                const previewImg = document.getElementById('studentImagePreview');
+                previewImg.src = tempStudentPreviewURL;
+                previewImg.classList.remove('hidden');
+                document.getElementById('studentImagePlaceholder').classList.add('hidden');
+            }
+        };
+
+        window.removeStudentImagePreview = function() {
+            const fileInput = document.getElementById('studentImageUploadInput');
+            fileInput.value = '';
+            tempStudentImageFile = null;
+            if (tempStudentPreviewURL) {
+                URL.revokeObjectURL(tempStudentPreviewURL);
+                tempStudentPreviewURL = null;
+            }
+            document.getElementById('studentImagePreview').classList.add('hidden');
+            document.getElementById('studentImagePlaceholder').classList.remove('hidden');
+            document.getElementById('studentImagePreview').src = '';
+        };
+
+        window.saveCreatedStudent = async function() {
             saveUndoState();
+            const name = document.getElementById('studentInputText').value.trim();
+            const bg = document.getElementById('studentInputBg').value;
+            const textColor = document.getElementById('studentInputColor').value;
+            if (!name) {
+                showToast("Παρακαλώ εισάγετε όνομα μαθητή!", "⚠️");
+                return;
+            }
+
+            let avatarUrl = '';
+            if (tempStudentImageFile) {
+                showToast("Ανέβασμα φωτογραφίας...", "⏳");
+                const url = await uploadImageToImgBB(tempStudentImageFile);
+                if (url) {
+                    avatarUrl = url;
+                } else {
+                    showToast("Το ανέβασμα απέτυχε, ο μαθητής θα δημιουργηθεί χωρίς φωτογραφία.", "⚠️");
+                }
+            }
+
             const id = 's_' + Date.now();
-            const num = config.students.length + 1;
-            const newStudent = { id: id, name: `Μαθητής ${num}`, avatar: '' };
+            const newStudent = {
+                id: id,
+                name: name,
+                avatar: avatarUrl,
+                bg: bg,
+                textColor: textColor
+            };
+
             config.students.push(newStudent);
             config.currentStudentId = id;
             currentTimes = [...defaultTimes];
             currentCells = {};
+            renderStudentPills();
+            renderGrid();
+            updateHeaderDetails();
+            closeStudentCreatorModal();
             autoSaveToFirebase();
-            switchStudent(id);
-            showToast("Δημιουργήθηκε νέος μαθητής!", "👤");
+            showToast("Ο μαθητής δημιουργήθηκε!", "👤");
+
+            tempStudentImageFile = null;
+            if (tempStudentPreviewURL) {
+                URL.revokeObjectURL(tempStudentPreviewURL);
+                tempStudentPreviewURL = null;
+            }
         };
 
-        function switchStudent(studentId) {
+        window.createNewStudent = function() {
+            openStudentCreatorModal();
+        };
+
+        window.switchStudent = function(studentId) {
             config.currentStudentId = studentId;
             renderStudentPills();
             renderGrid();
             updateHeaderDetails();
             autoSaveToFirebase();
-        }
-        window.switchStudent = switchStudent;
+        };
 
         window.renderStudentPills = function() {
             const container = document.getElementById('studentSelector');
             container.innerHTML = '';
             if (!config.students || config.students.length === 0) {
-                config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
+                config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '', bg: '', textColor: '' }];
             }
             config.students.forEach(s => {
                 const isActive = s.id === config.currentStudentId;
-                const pillClass = isActive 
-                    ? `bg-accent text-white shadow-lg border-2 border-white/20` 
-                    : `bg-slate-800 text-slate-300 border border-slate-700 hover:border-slate-500`;
+                const activeRing = isActive ? 'ring-4 ring-white shadow-xl scale-105' : '';
+                const styleAttr = s.bg ? `style="background-color: ${s.bg}; color: ${s.textColor || '#ffffff'};"` : '';
+                const pillClass = s.bg 
+                    ? `${activeRing} border-2 border-white/20` 
+                    : (isActive ? `bg-slate-800 text-white border-2 border-accent ${activeRing}` : `bg-slate-900/90 text-slate-300 border border-slate-700/80 hover:border-slate-500`);
+                
                 const avatarImgHtml = s.avatar 
-                    ? `<img class="w-6 h-6 rounded-full object-cover mr-1" src="${s.avatar}" alt="Avatar">` 
-                    : `<span class="mr-1 text-xs">👤</span>`;
+                    ? `<img class="w-16 h-16 rounded-xl object-cover shadow-md" src="${s.avatar}" alt="Avatar">` 
+                    : `<div class="w-16 h-16 rounded-xl bg-slate-950/60 flex items-center justify-center text-2xl shadow-inner">👤</div>`;
                 container.innerHTML += `
                     <div 
                         onclick="switchStudent('${s.id}')"
                         ondblclick="openStudentEditModal('${s.id}')"
-                        class="flex items-center gap-1 ${pillClass} px-3 py-1.5 rounded-xl font-bold text-sm cursor-pointer select-none transition-all hover:scale-105 animate-fade-in"
+                        ${styleAttr}
+                        class="relative flex flex-col items-center justify-center ${pillClass} p-2.5 rounded-2xl cursor-pointer select-none transition-all hover:scale-105 animate-fade-in min-w-[96px]"
                         title="Μονό κλικ: Εμφάνιση | Διπλό κλικ: Επεξεργασία">
                         ${avatarImgHtml}
-                        <span class="max-w-[120px] truncate">${s.name}</span>
-                        <button onclick="event.stopPropagation(); openStudentEditModal('${s.id}')" class="ml-1 text-xs opacity-60 hover:opacity-100 hover:text-accent-hover no-print" title="Επεξεργασία">📝</button>
+                        <span class="max-w-[100px] truncate text-xs font-black mt-1.5">${s.name}</span>
+                        <button onclick="event.stopPropagation(); openStudentEditModal('${s.id}')" class="absolute top-1.5 right-1.5 text-[10px] opacity-70 hover:opacity-100 hover:text-accent-hover no-print bg-black/40 px-1 py-0.5 rounded-md" title="Επεξεργασία">📝</button>
                     </div>
                 `;
             });
@@ -876,11 +1003,6 @@
             );
         };
 
-        window.manualSave = function() {
-            autoSaveToFirebase();
-            showToast("Το πρόγραμμα αποθηκεύτηκε στο cloud!", "💾");
-        };
-
         window.saveUndoState = function() {
             const state = {
                 currentTimes: JSON.parse(JSON.stringify(currentTimes)),
@@ -916,7 +1038,6 @@
             showToast("Έγινε αναίρεση!", "↩️");
         };
 
-        // -------------------- CUSTOM STAMPS (με ImgBB) --------------------
         window.openStampCreatorModal = function() {
             document.getElementById('stampInputText').value = '';
             document.getElementById('stampInputBg').value = '#1e3a8a';
@@ -1046,30 +1167,40 @@
             }
 
             config.customStamps.forEach(s => {
-                const imgTag = s.img ? `<img src="${s.img}" class="w-4 h-4 object-contain inline rounded"> ` : '';
                 const activeRing = (activeStamp && activeStamp.id === s.id) ? 'ring-4 ring-white' : '';
+                const contentHtml = s.img ? `
+                    <div class="flex flex-col items-center gap-1.5 p-1 w-full">
+                        <img src="${s.img}" class="w-16 h-16 object-contain rounded-lg bg-black/20 p-1 shadow-inner">
+                        <span class="text-xs font-extrabold truncate max-w-[100px]">${s.text}</span>
+                    </div>
+                ` : `
+                    <div class="px-3 py-2 text-sm font-extrabold truncate max-w-[120px]">
+                        ${s.text}
+                    </div>
+                `;
+
                 container.innerHTML += `
-                    <div id="wrapper-${s.id}" class="flex items-center gap-1 bg-slate-900/80 p-1.5 rounded-xl border border-slate-700/60 transition-all hover:scale-105">
+                    <div id="wrapper-${s.id}" class="flex items-center gap-1.5 bg-slate-900/80 p-2 rounded-xl border border-slate-700/60 transition-all hover:scale-105">
                         <button 
                             id="btn-${s.id}" 
                             onclick="selectStamp('${s.id}')"
                             style="background-color: ${s.bg}; color: ${s.textColor};"
-                            class="stamp-btn ${activeRing} px-3 py-1.5 rounded-lg text-xs font-extrabold shadow-sm transition-all flex items-center gap-1">
-                            ${imgTag}
-                            ${s.text}
+                            class="stamp-btn ${activeRing} rounded-xl shadow-sm transition-all flex flex-col items-center justify-center p-2 min-w-[84px]">
+                            ${contentHtml}
                         </button>
-                        <button onclick="deleteStamp('${s.id}')" class="text-xs opacity-50 hover:opacity-100 hover:text-red-500 px-1 transition-colors" title="Διαγραφή σφραγίδας">✕</button>
+                        <button onclick="deleteStamp('${s.id}')" class="text-xs opacity-50 hover:opacity-100 hover:text-red-500 px-1.5 py-1 transition-colors" title="Διαγραφή σφραγίδας">✕</button>
                     </div>
                 `;
             });
         };
 
-        // -------------------- STUDENT AVATAR (με ImgBB) --------------------
         window.openStudentEditModal = function(studentId) {
             const student = config.students.find(s => s.id === studentId);
             if (!student) return;
             document.getElementById('editStudentId').value = student.id;
             document.getElementById('editStudentName').value = student.name;
+            document.getElementById('editStudentBg').value = rgbToHex(student.bg || '#1e3a8a');
+            document.getElementById('editStudentColor').value = rgbToHex(student.textColor || '#93c5fd');
             tempAvatarFile = null;
             if (tempAvatarPreviewURL) {
                 URL.revokeObjectURL(tempAvatarPreviewURL);
@@ -1081,6 +1212,7 @@
             } else {
                 preview.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'/></svg>";
             }
+            document.getElementById('studentEditModal').classList.add('hidden'); // wait, remove hidden!
             document.getElementById('studentEditModal').classList.remove('hidden');
         };
 
@@ -1117,6 +1249,8 @@
             saveUndoState();
             const id = document.getElementById('editStudentId').value;
             const name = document.getElementById('editStudentName').value.trim();
+            const bg = document.getElementById('editStudentBg').value;
+            const textColor = document.getElementById('editStudentColor').value;
             if (!name) {
                 showToast("Το όνομα δεν μπορεί να είναι κενό!", "⚠️");
                 return;
@@ -1124,6 +1258,8 @@
             const student = config.students.find(s => s.id === id);
             if (student) {
                 student.name = name;
+                student.bg = bg;
+                student.textColor = textColor;
                 if (tempAvatarFile) {
                     showToast("Ανέβασμα φωτογραφίας...", "⏳");
                     const url = await uploadImageToImgBB(tempAvatarFile);
@@ -1132,11 +1268,7 @@
                     } else {
                         showToast("Το ανέβασμα απέτυχε, η φωτογραφία δεν άλλαξε.", "⚠️");
                     }
-                } else if (tempAvatarFile === null && student.avatar) {
-                    student.avatar = '';
-                }
-                const preview = document.getElementById('editStudentAvatarPreview');
-                if (preview.src.includes('svg') && !tempAvatarFile) {
+                } else if (tempAvatarFile === null && student.avatar && document.getElementById('editStudentAvatarPreview').src.includes('svg')) {
                     student.avatar = '';
                 }
                 renderStudentPills();
@@ -1178,8 +1310,6 @@
             );
         };
 
-        // -------------------- CELL INTERACTIONS --------------------
-        // Γρήγορη τοπική αλλαγή μεγέθους (χωρίς αποθήκευση)
         window.changeCellImageWidthLocal = function(row, col, width) {
             const imgEl = document.getElementById(`img-${row}-${col}`);
             if (imgEl) {
@@ -1212,24 +1342,21 @@
             window.saveCellImageWidth(row, col, width);
         };
 
-        // -------------------- Η ΚΡΙΣΙΜΗ ΣΥΝΑΡΤΗΣΗ: handleCellClick με φωνή --------------------
         window.handleCellClick = function(row, col) {
             const cellKey = `${config.currentStudentId}_${row}_${col}`;
             if (activeStamp) {
                 saveUndoState();
-                // Βεβαιωνόμαστε ότι το κείμενο της σφραγίδας υπάρχει
                 const stampText = activeStamp.text || '';
                 currentCells[cellKey] = {
                     text: stampText,
                     bg: activeStamp.bg,
                     textColor: activeStamp.textColor,
                     img: activeStamp.img || '',
-                    imgWidth: activeStamp.imgWidth || 48,
+                    imgWidth: activeStamp.img ? 92 : 48,
                     fontSize: activeStamp.fontSize || 14
                 };
                 renderGrid();
                 autoSaveToFirebase();
-                // ΕΚΦΩΝΗΣΗ ΜΕ ΚΑΘΥΣΤΕΡΗΣΗ 400ms (για να ολοκληρωθεί το grid)
                 setTimeout(() => {
                     speakGreek(stampText);
                 }, 400);
@@ -1400,10 +1527,8 @@
             draggedCellId = null;
         };
 
-        // -------------------- TEXT TO SPEECH (ΧΩΡΙΣ CANCEL) --------------------
         function speakGreek(text) {
             if (!text || !('speechSynthesis' in window)) return;
-            // ΔΕΝ κάνουμε cancel – αφήνουμε την ομιλία να τρέξει
             const utterance = new SpeechSynthesisUtterance(text.trim());
             const voices = window.speechSynthesis.getVoices();
             const greekVoice = voices.find(v => v.lang.startsWith('el'));
@@ -1424,7 +1549,6 @@
             }
         };
 
-        // -------------------- ΕΚΤΥΠΩΣΗ ΜΕ ΕΠΙΛΟΓΗ ΧΡΩΜΑΤΟΣ --------------------
         window.triggerPrint = function() {
             const printColor = document.getElementById('printColorCheck').checked;
             if (printColor) {
@@ -1436,7 +1560,6 @@
                 window.focus();
                 setTimeout(() => { 
                     window.print(); 
-                    // Αφαιρούμε την κλάση μετά το print (για να μην μείνει)
                     document.body.classList.remove('print-color');
                 }, 200);
             } catch (e) {
@@ -1445,18 +1568,12 @@
             }
         };
 
-        // -------------------- RENDER GRID (με γρήγορο slider) --------------------
         window.renderGrid = function() {
-            console.log('🔄 renderGrid() κλήθηκε. currentTimes:', currentTimes);
             const grid = document.getElementById('scheduleGrid');
-            if (!grid) {
-                console.error('❌ Το grid δεν βρέθηκε στο DOM!');
-                return;
-            }
+            if (!grid) return;
             grid.innerHTML = '';
 
             if (!currentTimes || currentTimes.length === 0) {
-                console.warn('⚠️ currentTimes είναι κενό – χρησιμοποιώ defaultTimes');
                 currentTimes = [...defaultTimes];
             }
 
@@ -1594,12 +1711,9 @@
             });
         };
 
-        // -------------------- ΑΥΤΟΜΑΤΗ ΑΠΟΣΥΝΔΕΣΗ --------------------
         window.addEventListener('beforeunload', () => {
             signOut(auth).catch(() => {});
         });
-
-        console.log('✅ ClassFlow – Slider γρήγορο, σφραγίδες με φωνή (με καθυστέρηση)!');
     </script>
 </body>
 </html>
