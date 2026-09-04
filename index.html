@@ -80,7 +80,7 @@
             animation: fadeIn 0.25s ease-out forwards;
         }
 
-        /* ---------- ΑΛΛΑΓΕΣ ΣΤΗΝ ΕΚΤΥΠΩΣΗ ---------- */
+        /* Printing styles */
         @media print {
             body { background: white !important; color: black !important; padding: 0 !important; }
             header, .no-print, button, input, select, .group-hover\:opacity-100, .stamp-container, .cell-slider-container { display: none !important; }
@@ -123,7 +123,6 @@
                 color: var(--cell-color, initial) !important;
             }
         }
-        /* ------------------------------------------- */
 
         /* Login form styles */
         #login-form {
@@ -178,17 +177,15 @@
 </head>
 <body>
 
-    <!-- LOGIN FORM -->
     <div id="login-form">
         <h1 class="text-3xl font-black text-center mb-6 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">🔐 FancyClass</h1>
         <p class="text-slate-400 text-sm text-center mb-6">Συνδεθείτε για να δείτε το πρόγραμμά σας</p>
-        <input type="email" id="email" placeholder="Email" required>
-        <input type="password" id="password" placeholder="Κωδικός" required>
-        <button id="login-btn">Σύνδεση</button>
+        <input type="email" id="email" placeholder="Email...">
+        <input type="password" id="password" placeholder="Κωδικός...">
+        <button id="login-btn">Είσοδος</button>
         <div id="login-error"></div>
     </div>
 
-    <!-- MAIN APPLICATION (hidden until login) -->
     <div id="app-content" class="p-4 md:p-8 font-sans max-w-[98%] mx-auto">
 
         <!-- HEADER & SELECTORS -->
@@ -217,7 +214,7 @@
                     ➕ Νέος Μαθητής
                 </button>
             </div>
-                        
+                    
             <!-- Custom Stamps Toolbar -->
             <div class="mb-6 bg-slate-900/40 p-4 rounded-2xl border border-slate-800 flex flex-col gap-3 justify-center items-center stamp-container">
                 <div class="flex flex-col md:flex-row justify-between items-center w-full px-2 gap-2">
@@ -228,7 +225,7 @@
                 </div>
                 <div id="customStampsContainer" class="flex flex-wrap gap-2.5 justify-center"></div>
             </div>
-                        
+                    
             <!-- Quick Toolbar -->
             <div class="flex flex-wrap justify-between items-center gap-4 bg-slate-800/80 p-4 rounded-2xl shadow-xl border border-slate-700">
                 <div class="flex items-center gap-3">
@@ -573,19 +570,14 @@
                     throw new Error('ImgBB upload failed');
                 }
                 const data = await response.json();
-                if (data.success) {
-                    return data.data.url;
-                } else {
-                    throw new Error('ImgBB error: ' + (data.error?.message || 'unknown'));
-                }
+                return data.data.url;
             } catch (error) {
-                console.error('ImgBB upload error:', error);
-                showToast('Σφάλμα ανεβάσματος εικόνας στο ImgBB', '❌');
+                console.error('Σφάλμα μεταφόρτωσης ImgBB:', error);
                 return null;
             }
         }
 
-        function saveFullStateToFirebase(userId) {
+        function saveFullStateFromFirebase(userId) {
             const payload = {
                 config: config,
                 currentTimes: currentTimes,
@@ -596,6 +588,21 @@
                     console.error('Σφάλμα αποθήκευσης στο Firebase:', error);
                     showToast("Σφάλμα αποθήκευσης!", "❌");
                 });
+        }
+
+        function loadGlobalAppTitle() {
+            const titleRef = ref(db, 'appConfig/appTitle');
+            onValue(titleRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const title = snapshot.val();
+                    config.appTitle = title;
+                    document.getElementById('appTitle').innerText = title;
+                } else {
+                    set(titleRef, 'FancyClass');
+                    config.appTitle = 'FancyClass';
+                    document.getElementById('appTitle').innerText = 'FancyClass';
+                }
+            });
         }
 
         function loadFullStateFromFirebase(userId) {
@@ -613,9 +620,6 @@
                     document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
                     document.documentElement.style.setProperty('--bg-app', config.bgApp || '#0f172a');
                     document.documentElement.style.setProperty('--bg-card', config.bgCard || '#1e293b');
-                    if (config.appTitle) {
-                        document.getElementById('appTitle').innerText = config.appTitle;
-                    }
                     return true;
                 } else {
                     currentTimes = [...defaultTimes];
@@ -720,6 +724,7 @@
                 config.customStamps = [];
 
                 isInitialLoad = true;
+                loadGlobalAppTitle();
                 loadFullStateFromFirebase(user.uid).then(() => {
                     listenForRemoteChanges(user.uid);
                     renderStudentPills();
@@ -738,6 +743,7 @@
 
         window.saveAppTitle = function(text) {
             config.appTitle = text.trim() || 'FancyClass';
+            set(ref(db, 'appConfig/appTitle'), config.appTitle).catch(err => console.error(err));
             autoSaveToFirebase();
             showToast("Ο τίτλος ενημερώθηκε!", "✏️");
         };
@@ -892,7 +898,7 @@
             const container = document.getElementById('studentSelector');
             container.innerHTML = '';
             if (!config.students || config.students.length === 0) {
-                config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '', bg: '', textColor: '' }];
+                config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
             }
             config.students.forEach(s => {
                 const isActive = s.id === config.currentStudentId;
@@ -1212,7 +1218,6 @@
             } else {
                 preview.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'/></svg>";
             }
-            document.getElementById('studentEditModal').classList.add('hidden'); // wait, remove hidden!
             document.getElementById('studentEditModal').classList.remove('hidden');
         };
 
