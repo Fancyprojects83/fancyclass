@@ -3,16 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fancy Class</title>
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0f172a">
-    <link rel="icon" href="/icons/icon-192.png">
-    <link rel="apple-touch-icon" href="/icons/icon-192.png">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>FancyClass - Πρόγραμμα Μαθημάτων</title>
     <script src="https://cdn.tailwindcss.com"></script>
-
     <style>
         :root {
             --accent: #6366f1;
@@ -83,7 +75,6 @@
             animation: fadeIn 0.25s ease-out forwards;
         }
 
-        /* Custom scrollbar for horizontal schedule scroll on small screens */
         .custom-scrollbar::-webkit-scrollbar {
             height: 8px;
         }
@@ -134,7 +125,6 @@
             }
         }
 
-        /* Login form styles */
         #login-form {
             max-width: 380px;
             margin: 10vh auto;
@@ -185,7 +175,7 @@
         }
     </style>
 </head>
-<body>
+<body class="min-h-screen text-slate-100">
 
     <div id="login-form">
         <h1 class="text-3xl font-black text-center mb-6 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">🔐 FancyClass</h1>
@@ -216,7 +206,6 @@
                 </div>
             </div>
 
-            <!-- Student Pills Selector -->
             <div class="flex flex-wrap justify-center items-center gap-3 mb-6 bg-slate-900/60 p-4 rounded-3xl border border-slate-800 backdrop-blur">
                 <span class="text-slate-400 font-bold text-sm mr-2">ΜΑΘΗΤΕΣ:</span>
                 <div id="studentSelector" class="flex flex-wrap gap-2"></div>
@@ -225,7 +214,6 @@
                 </button>
             </div>
                     
-            <!-- Custom Stamps Toolbar -->
             <div class="mb-6 bg-slate-900/40 p-4 rounded-2xl border border-slate-800 flex flex-col gap-3 justify-center items-center stamp-container">
                 <div class="flex flex-col md:flex-row justify-between items-center w-full px-2 gap-2">
                     <span class="text-xs font-black text-slate-400 tracking-wider">🖌️ ΔΙΚΕΣ ΣΟΥ ΣΦΡΑΓΙΔΕΣ ΜΑΘΗΜΑΤΩΝ (Ενεργοποίησε μία και κάνε κλικ σε ένα κελί)</span>
@@ -236,7 +224,6 @@
                 <div id="customStampsContainer" class="flex flex-wrap gap-2.5 justify-center"></div>
             </div>
                     
-            <!-- Quick Toolbar -->
             <div class="flex flex-wrap justify-between items-center gap-4 bg-slate-800/80 p-4 rounded-2xl shadow-xl border border-slate-700">
                 <div class="flex items-center gap-3">
                     <span class="text-slate-400 font-bold text-sm">Πρόγραμμα:</span>
@@ -445,7 +432,6 @@
 
     </div>
 
-    <!-- FIREBASE SDK -->
     <script type="importmap">
         {
             "imports": {
@@ -496,6 +482,7 @@
         };
 
         const defaultTimes = ['08:00', '09:00', '10:00-10:30', '11:00', '12:00'];
+        let studentTimes = {};
         let currentTimes = [...defaultTimes];
         let currentCells = {};
         let activeStamp = null;
@@ -512,6 +499,19 @@
         let isInitialLoad = true;
 
         const IMGBB_API_KEY = 'b1a8388f6b7c544529b95f37048a3c7e';
+
+        function getStudentTimes(studentId) {
+            const sid = studentId || config.currentStudentId || 's1';
+            if (!studentTimes[sid] || !Array.isArray(studentTimes[sid]) || studentTimes[sid].length === 0) {
+                if (currentTimes && currentTimes.length > 0) {
+                    studentTimes[sid] = [...currentTimes];
+                } else {
+                    studentTimes[sid] = [...defaultTimes];
+                }
+            }
+            return studentTimes[sid];
+        }
+        window.getStudentTimes = getStudentTimes;
 
         function rgbToHex(color) {
             if (!color || typeof color !== 'string') return '#1e293b';
@@ -585,9 +585,11 @@
         }
 
         function saveFullStateFromFirebase(userId) {
+            const activeTimes = getStudentTimes(config.currentStudentId);
             const payload = {
                 config: config,
-                currentTimes: currentTimes,
+                studentTimes: studentTimes,
+                currentTimes: activeTimes,
                 currentCells: currentCells,
             };
             set(ref(db, 'users/' + userId + '/appState'), payload)
@@ -621,7 +623,16 @@
                     if (!config.customStamps) config.customStamps = [];
                     if (!config.students) config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
                     config.students.forEach(s => { if (s.avatar === undefined) s.avatar = ''; });
+                    
+                    studentTimes = data.studentTimes || {};
                     currentTimes = data.currentTimes || [...defaultTimes];
+                    if (Object.keys(studentTimes).length === 0) {
+                        const activeId = config.currentStudentId || (config.students[0] && config.students[0].id) || 's1';
+                        studentTimes[activeId] = [...currentTimes];
+                    } else {
+                        currentTimes = getStudentTimes(config.currentStudentId);
+                    }
+
                     currentCells = data.currentCells || {};
                     document.documentElement.style.setProperty('--accent', config.accentHex || '#6366f1');
                     document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
@@ -630,6 +641,7 @@
                     return true;
                 } else {
                     currentTimes = [...defaultTimes];
+                    studentTimes = { [config.currentStudentId || 's1']: [...defaultTimes] };
                     currentCells = {};
                     config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
                     config.customStamps = [];
@@ -648,14 +660,23 @@
                 if (snapshot.exists() && !isInitialLoad) {
                     const data = snapshot.val();
                     const oldConfig = JSON.stringify(config);
-                    const oldTimes = JSON.stringify(currentTimes);
+                    const oldStudentTimes = JSON.stringify(studentTimes);
                     const oldCells = JSON.stringify(currentCells);
 
                     config = data.config || config;
                     if (!config.customStamps) config.customStamps = [];
                     if (!config.students) config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
                     config.students.forEach(s => { if (s.avatar === undefined) s.avatar = ''; });
+
+                    studentTimes = data.studentTimes || {};
                     currentTimes = data.currentTimes || [...defaultTimes];
+                    if (Object.keys(studentTimes).length === 0) {
+                        const activeId = config.currentStudentId || 's1';
+                        studentTimes[activeId] = [...currentTimes];
+                    } else {
+                        currentTimes = getStudentTimes(config.currentStudentId);
+                    }
+
                     currentCells = data.currentCells || {};
 
                     document.documentElement.style.setProperty('--accent', config.accentHex || '#6366f1');
@@ -666,7 +687,7 @@
                         document.getElementById('appTitle').innerText = config.appTitle;
                     }
 
-                    if (oldConfig !== JSON.stringify(config) || oldTimes !== JSON.stringify(currentTimes) || oldCells !== JSON.stringify(currentCells)) {
+                    if (oldConfig !== JSON.stringify(config) || oldStudentTimes !== JSON.stringify(studentTimes) || oldCells !== JSON.stringify(currentCells)) {
                         renderStudentPills();
                         renderCustomStamps();
                         renderGrid();
@@ -726,6 +747,7 @@
                 userEmailSpan.textContent = user.email;
 
                 currentTimes = [...defaultTimes];
+                studentTimes = {};
                 currentCells = {};
                 config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
                 config.customStamps = [];
@@ -873,8 +895,8 @@
 
             config.students.push(newStudent);
             config.currentStudentId = id;
-            currentTimes = [...defaultTimes];
-            currentCells = {};
+            studentTimes[id] = [...defaultTimes];
+            currentTimes = studentTimes[id];
             renderStudentPills();
             renderGrid();
             updateHeaderDetails();
@@ -895,6 +917,7 @@
 
         window.switchStudent = function(studentId) {
             config.currentStudentId = studentId;
+            currentTimes = getStudentTimes(studentId);
             renderStudentPills();
             renderGrid();
             updateHeaderDetails();
@@ -919,6 +942,7 @@
                     Object.keys(currentCells).forEach(key => {
                         if (key.startsWith(prefix)) delete currentCells[key];
                     });
+                    delete studentTimes[studentId];
                     config.students = config.students.filter(s => s.id !== studentId);
                     if (config.currentStudentId === studentId) {
                         config.currentStudentId = config.students[0].id;
@@ -926,6 +950,7 @@
                     if (document.getElementById('editStudentId').value === studentId) {
                         closeStudentEditModal();
                     }
+                    currentTimes = getStudentTimes(config.currentStudentId);
                     renderStudentPills();
                     renderGrid();
                     updateHeaderDetails();
@@ -999,9 +1024,24 @@
             }
         };
 
+        window.updateHourText = function(rowIndex, text) {
+            const cleanText = text.replace(/[\r\n]+/g, ' ').trim() || `Ώρα ${rowIndex + 1}`;
+            const times = getStudentTimes(config.currentStudentId);
+            if (times[rowIndex] !== cleanText) {
+                saveUndoState();
+                times[rowIndex] = cleanText;
+                currentTimes = times;
+                autoSaveToFirebase();
+                renderGrid();
+                showToast("Η ώρα αποθηκεύτηκε!", "⏱️");
+            }
+        };
+
         window.addHour = function() {
             saveUndoState();
-            currentTimes.push('13:00');
+            const times = getStudentTimes(config.currentStudentId);
+            times.push('13:00');
+            currentTimes = times;
             renderGrid();
             autoSaveToFirebase();
             showToast("Προστέθηκε νέα ώρα!", "⏱️");
@@ -1016,9 +1056,10 @@
                 () => {
                     saveUndoState();
                     const studentId = config.currentStudentId;
+                    const times = getStudentTimes(studentId);
                     for (let col = 1; col <= 5; col++) {
                         delete currentCells[`${studentId}_${index}_${col}`];
-                        for (let r = index + 1; r < currentTimes.length; r++) {
+                        for (let r = index + 1; r < times.length; r++) {
                             const oldKey = `${studentId}_${r}_${col}`;
                             const newKey = `${studentId}_${r - 1}_${col}`;
                             if (currentCells[oldKey]) {
@@ -1027,7 +1068,8 @@
                             }
                         }
                     }
-                    currentTimes.splice(index, 1);
+                    times.splice(index, 1);
+                    currentTimes = times;
                     renderGrid();
                     autoSaveToFirebase();
                     showToast("Η ώρα διαγράφηκε.", "🗑️");
@@ -1058,7 +1100,8 @@
 
         window.saveUndoState = function() {
             const state = {
-                currentTimes: JSON.parse(JSON.stringify(currentTimes)),
+                studentTimes: JSON.parse(JSON.stringify(studentTimes)),
+                currentTimes: JSON.parse(JSON.stringify(getStudentTimes(config.currentStudentId))),
                 currentCells: JSON.parse(JSON.stringify(currentCells)),
                 config: JSON.parse(JSON.stringify(config))
             };
@@ -1070,6 +1113,9 @@
         window.undo = function() {
             if (undoStack.length === 0) return;
             const previousState = undoStack.pop();
+            if (previousState.studentTimes) {
+                studentTimes = previousState.studentTimes;
+            }
             currentTimes = previousState.currentTimes;
             currentCells = previousState.currentCells;
             config = previousState.config;
@@ -1350,11 +1396,13 @@
                     Object.keys(currentCells).forEach(key => {
                         if (key.startsWith(prefix)) delete currentCells[key];
                     });
+                    delete studentTimes[id];
                     config.students = config.students.filter(s => s.id !== id);
                     if (config.currentStudentId === id) {
                         config.currentStudentId = config.students[0].id;
                     }
                     closeStudentEditModal();
+                    currentTimes = getStudentTimes(config.currentStudentId);
                     renderStudentPills();
                     renderGrid();
                     updateHeaderDetails();
@@ -1583,7 +1631,7 @@
 
         function speakGreek(text) {
             if (!text || !('speechSynthesis' in window)) return;
-            window.speechSynthesis.cancel(); // Stop any pending speech
+            window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text.trim());
             
             const setVoice = () => {
@@ -1637,9 +1685,7 @@
             if (!grid) return;
             grid.innerHTML = '';
 
-            if (!currentTimes || currentTimes.length === 0) {
-                currentTimes = [...defaultTimes];
-            }
+            const times = getStudentTimes(config.currentStudentId);
 
             const headers = ['Ώρα', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή'];
             headers.forEach(h => {
@@ -1650,13 +1696,15 @@
                 `;
             });
 
-            currentTimes.forEach((time, rowIndex) => {
+            times.forEach((time, rowIndex) => {
                 grid.innerHTML += `
                     <div class="relative group bg-slate-900/60 p-4 rounded-2xl border border-slate-800 flex flex-col justify-center items-center text-center">
                         <div 
                             contenteditable="true" 
-                            onblur="saveUndoState(); currentTimes[${rowIndex}] = this.innerText; renderGrid(); autoSaveToFirebase();" 
-                            class="text-sm font-extrabold focus:outline-none focus:ring-1 focus:ring-accent px-1.5 py-0.5 rounded cursor-text">
+                            onkeydown="if(event.key==='Enter'){ event.preventDefault(); this.blur(); }"
+                            onblur="updateHourText(${rowIndex}, this.innerText)" 
+                            class="text-sm font-extrabold focus:outline-none focus:ring-1 focus:ring-accent px-1.5 py-0.5 rounded cursor-text"
+                            title="Κάντε κλικ για να επεξεργαστείτε την ώρα">
                             ${time}
                         </div>
                         <button 
