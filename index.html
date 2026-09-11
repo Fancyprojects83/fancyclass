@@ -12,6 +12,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <script src="https://cdn.tailwindcss.com"></script>
+
     <style>
         :root {
             --accent: #6366f1;
@@ -24,6 +25,7 @@
              color: #f8fafc; 
              transition: background-color 0.3s ease;
              user-select: none;
+             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
         }
         .bg-accent { background-color: var(--accent); }
         .text-accent { color: var(--accent); }
@@ -36,7 +38,7 @@
         }
         .editable:focus { 
              outline: none; 
-             background-color: rgba(255,255,255,0.08); 
+             background-color: rgba(255,255,255,0.12); 
              border-radius: 0.5rem; 
              box-shadow: 0 0 0 2px var(--accent); 
         }
@@ -53,6 +55,7 @@
         }
         input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
         input[type="color"]::-webkit-color-swatch { border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; }
+        
         .dragging {
             opacity: 0.5;
             transform: scale(0.95);
@@ -80,7 +83,19 @@
             animation: fadeIn 0.25s ease-out forwards;
         }
 
-        /* Printing styles */
+        /* Custom scrollbar for horizontal schedule scroll on small screens */
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0f172a;
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 8px;
+        }
+
         @media print {
             body { background: white !important; color: black !important; padding: 0 !important; }
             header, .no-print, button, input, select, .group-hover\:opacity-100, .stamp-container, .cell-slider-container { display: none !important; }
@@ -94,6 +109,7 @@
             #scheduleGrid { 
                  grid-template-columns: repeat(6, 1fr) !important; 
                  gap: 6px !important; 
+                 min-width: 100% !important;
              }
             .editable { color: #000000 !important; }
             .preview-img { max-height: 110px !important; }
@@ -115,12 +131,6 @@
             }
             body.print-color .preview-img {
                 max-height: 110px !important;
-            }
-            body.print-color .cell[style*="background-color"] {
-                background-color: var(--cell-bg, initial) !important;
-            }
-            body.print-color .cell[style*="color"] {
-                color: var(--cell-color, initial) !important;
             }
         }
 
@@ -190,17 +200,17 @@
 
         <!-- HEADER & SELECTORS -->
         <header class="mb-6 text-center no-print">
-            <div class="flex justify-between items-center mb-6">
+            <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
                 <div class="flex items-center gap-2">
                     <img src="https://media.base44.com/images/public/6a475d1d4890e09d795dfcae/af4793167_logo.png" alt="FancyClass" class="w-8 h-8 object-contain">
-                    <h1 id="appTitle" contenteditable="true" onblur="saveAppTitle(this.innerText)" class="text-3xl font-black tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent focus:outline-none focus:ring-1 focus:ring-slate-500 rounded px-1 cursor-text" title="Κάντε κλικ για αλλαγή του τίτλου">
+                    <h1 id="appTitle" contenteditable="true" onblur="saveAppTitle(this.innerText)" class="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent focus:outline-none focus:ring-1 focus:ring-slate-500 rounded px-1 cursor-text" title="Κάντε κλικ για αλλαγή του τίτλου">
                         FancyClass
                     </h1>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-wrap">
                     <span id="user-email" class="text-slate-400 text-sm font-bold mr-2"></span>
-                    <button onclick="logoutUser()" class="px-4 py-2 bg-red-600/30 hover:bg-red-600/50 text-red-300 rounded-xl border border-red-500/30 transition-all text-sm font-bold">🚪 Αποσύνδεση</button>
-                    <button onclick="openSettingsModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all text-slate-300 font-bold flex items-center gap-2 text-sm">
+                    <button onclick="logoutUser()" class="px-3.5 py-2 bg-red-600/30 hover:bg-red-600/50 text-red-300 rounded-xl border border-red-500/30 transition-all text-sm font-bold">🚪 Αποσύνδεση</button>
+                    <button onclick="openSettingsModal()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all text-slate-300 font-bold flex items-center gap-2 text-sm">
                         ⚙️ Ρυθμίσεις
                     </button>
                 </div>
@@ -256,11 +266,12 @@
             </div>
         </header>
 
-        <!-- SCHEDULE GRID -->
-        <div id="scheduleGrid" class="grid grid-cols-6 gap-3"></div>
+        <div class="w-full overflow-x-auto custom-scrollbar pb-2">
+            <div id="scheduleGrid" class="grid grid-cols-6 gap-3 min-w-[760px]"></div>
+        </div>
 
         <!-- MODALS -->
-        <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print">
+        <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print p-4">
             <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                 <h3 class="text-xl font-black mb-6 flex items-center gap-2">⚙️ Ρυθμίσεις Εμφάνισης</h3>
                 <div class="mb-6 bg-slate-900/50 p-4 rounded-2xl border border-slate-700/50">
@@ -287,7 +298,7 @@
             </div>
         </div>
 
-        <div id="stampCreatorModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print">
+        <div id="stampCreatorModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print p-4">
             <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                 <h3 class="text-xl font-black mb-4 flex items-center gap-2">🎨 Δημιουργία Σφραγίδας</h3>
                 <div class="mb-4">
@@ -329,7 +340,7 @@
             </div>
         </div>
 
-        <div id="studentCreatorModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print">
+        <div id="studentCreatorModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print p-4">
             <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                 <h3 class="text-xl font-black mb-4 flex items-center gap-2">👤 Δημιουργία Μαθητή</h3>
                 <div class="mb-4">
@@ -371,7 +382,7 @@
             </div>
         </div>
 
-        <div id="studentEditModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print">
+        <div id="studentEditModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print p-4">
             <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                 <h3 class="text-xl font-black mb-4 flex items-center gap-2">📝 Επεξεργασία Μαθητή</h3>
                 <input type="hidden" id="editStudentId">
@@ -416,7 +427,7 @@
             </div>
         </div>
 
-        <div id="confirmModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center hidden no-print">
+        <div id="confirmModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[70] flex items-center justify-center hidden no-print p-4">
             <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
                 <div class="text-4xl mb-4" id="confirmIcon">⚠️</div>
                 <h4 class="text-lg font-black mb-2 text-white" id="confirmTitle">Είστε σίγουροι;</h4>
@@ -1112,7 +1123,7 @@
                 const previewImg = document.getElementById('stampImagePreview');
                 previewImg.src = tempStampPreviewURL;
                 previewImg.classList.remove('hidden');
-                document.getElementById('stampImagePlaceholder').classList.add('hidden');
+                document.getElementById('studentImagePlaceholder').classList.add('hidden');
             }
         };
 
@@ -1572,13 +1583,23 @@
 
         function speakGreek(text) {
             if (!text || !('speechSynthesis' in window)) return;
+            window.speechSynthesis.cancel(); // Stop any pending speech
             const utterance = new SpeechSynthesisUtterance(text.trim());
-            const voices = window.speechSynthesis.getVoices();
-            const greekVoice = voices.find(v => v.lang.startsWith('el'));
-            if (greekVoice) utterance.voice = greekVoice;
-            utterance.pitch = 1.0;
-            utterance.rate = 1.0;
-            window.speechSynthesis.speak(utterance);
+            
+            const setVoice = () => {
+                const voices = window.speechSynthesis.getVoices();
+                const greekVoice = voices.find(v => v.lang.startsWith('el'));
+                if (greekVoice) utterance.voice = greekVoice;
+                utterance.pitch = 1.0;
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            };
+
+            if (window.speechSynthesis.getVoices().length === 0) {
+                window.speechSynthesis.onvoiceschanged = setVoice;
+            } else {
+                setVoice();
+            }
         }
 
         window.speakCell = function(row, col) {
