@@ -497,6 +497,7 @@
         let tempAvatarPreviewURL = null;
         let confirmCallback = null;
         let isInitialLoad = true;
+        let isLocalSaving = false;
 
         const IMGBB_API_KEY = 'b1a8388f6b7c544529b95f37048a3c7e';
 
@@ -585,6 +586,7 @@
         }
 
         function saveFullStateFromFirebase(userId) {
+            isLocalSaving = true;
             const activeTimes = getStudentTimes(config.currentStudentId);
             const payload = {
                 config: config,
@@ -596,6 +598,9 @@
                 .catch((error) => {
                     console.error('Σφάλμα αποθήκευσης στο Firebase:', error);
                     showToast("Σφάλμα αποθήκευσης!", "❌");
+                })
+                .finally(() => {
+                    setTimeout(() => { isLocalSaving = false; }, 300);
                 });
         }
 
@@ -657,12 +662,8 @@
         function listenForRemoteChanges(userId) {
             const stateRef = ref(db, 'users/' + userId + '/appState');
             onValue(stateRef, (snapshot) => {
-                if (snapshot.exists() && !isInitialLoad) {
+                if (snapshot.exists() && !isInitialLoad && !isLocalSaving) {
                     const data = snapshot.val();
-                    const oldConfig = JSON.stringify(config);
-                    const oldStudentTimes = JSON.stringify(studentTimes);
-                    const oldCells = JSON.stringify(currentCells);
-
                     config = data.config || config;
                     if (!config.customStamps) config.customStamps = [];
                     if (!config.students) config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
@@ -687,13 +688,11 @@
                         document.getElementById('appTitle').innerText = config.appTitle;
                     }
 
-                    if (oldConfig !== JSON.stringify(config) || oldStudentTimes !== JSON.stringify(studentTimes) || oldCells !== JSON.stringify(currentCells)) {
-                        renderStudentPills();
-                        renderCustomStamps();
-                        renderGrid();
-                        updateHeaderDetails();
-                        showToast("Συγχρονίστηκε με το cloud!", "🔄");
-                    }
+                    renderStudentPills();
+                    renderCustomStamps();
+                    renderGrid();
+                    updateHeaderDetails();
+                    showToast("Συγχρονίστηκε με το cloud!", "🔄");
                 }
                 isInitialLoad = false;
             }, (error) => {
@@ -880,7 +879,7 @@
                 if (url) {
                     avatarUrl = url;
                 } else {
-                    showToast("Το ανέβασμα απέτυχε, ο μαθητής θα δημιουργηθεί χωρίς φωτογραφία.", "⚠️");
+                    showToast("Το ανέβασμα απέτυχες, ο μαθητής θα δημιουργηθεί χωρίς φωτογραφία.", "⚠️");
                 }
             }
 
@@ -1169,7 +1168,7 @@
                 const previewImg = document.getElementById('stampImagePreview');
                 previewImg.src = tempStampPreviewURL;
                 previewImg.classList.remove('hidden');
-                document.getElementById('studentImagePlaceholder').classList.add('hidden');
+                document.getElementById('stampImagePlaceholder').classList.add('hidden');
             }
         };
 
@@ -1802,11 +1801,12 @@
                                 </div>
                             </div>
 
-                            <div class="w-full mb-2">
+                            <div class="w-full mb-2" onmousedown="disableDrag(event)" onclick="event.stopPropagation()">
                                 <span class="text-[9px] uppercase font-bold text-slate-400 block mb-0.5 text-left pl-1">Μάθημα:</span>
                                 <div 
                                     id="text-${rowIndex}-${col}"
                                     contenteditable="true"
+                                    onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); this.blur(); }"
                                     onblur="handleCellInput(event, ${rowIndex}, ${col})"
                                     style="font-size: ${cellFontSize}px;"
                                     class="editable font-extrabold whitespace-pre-line focus:outline-none p-1.5 bg-slate-950/45 border border-slate-800 rounded-xl cursor-text min-h-[36px] max-h-[64px] overflow-y-auto text-center">
@@ -1822,10 +1822,6 @@
                 }
             });
         };
-
-        window.addEventListener('beforeunload', () => {
-            signOut(auth).catch(() => {});
-        });
     </script>
 </body>
 </html>
