@@ -287,7 +287,8 @@
 
         <div id="stampCreatorModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print p-4">
             <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-                <h3 class="text-xl font-black mb-4 flex items-center gap-2">🎨 Δημιουργία Σφραγίδας</h3>
+                <h3 id="stampCreatorTitle" class="text-xl font-black mb-4 flex items-center gap-2">🎨 Δημιουργία Σφραγίδας</h3>
+                <input type="hidden" id="editingStampId">
                 <div class="mb-4">
                     <label class="block text-slate-400 text-sm font-bold mb-2">Όνομα Μαθήματος / Δραστηριότητας:</label>
                     <input type="text" id="stampInputText" placeholder="π.χ. Μαθηματικά..." class="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl font-bold text-white focus:outline-none focus:border-accent">
@@ -498,8 +499,26 @@
         let confirmCallback = null;
         let isInitialLoad = true;
         let isLocalSaving = false;
+        let unsubscribeStateListener = null;
 
         const IMGBB_API_KEY = 'b1a8388f6b7c544529b95f37048a3c7e';
+
+        function normalizeConfig() {
+            if (!Array.isArray(config.students) || config.students.length === 0) {
+                config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
+            }
+            config.students.forEach(student => {
+                if (!student.id) student.id = 's_' + Date.now() + Math.random().toString(36).slice(2);
+                if (student.name === undefined || student.name === null) student.name = 'Μαθητής';
+                if (student.avatar === undefined) student.avatar = '';
+            });
+            if (!config.students.some(student => student.id === config.currentStudentId)) {
+                config.currentStudentId = config.students[0].id;
+            }
+            if (!config.customStamps || !Array.isArray(config.customStamps)) {
+                config.customStamps = [];
+            }
+        }
 
         function getStudentTimes(studentId) {
             const sid = studentId || config.currentStudentId || 's1';
@@ -531,6 +550,12 @@
             const g = parseInt(match[2], 10);
             const b = parseInt(match[3], 10);
             return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>'"]/g, char => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            })[char]);
         }
 
         function showToast(text, icon = '✨') {
@@ -625,9 +650,7 @@
                 if (snapshot.exists()) {
                     const data = snapshot.val();
                     config = data.config || config;
-                    if (!config.customStamps) config.customStamps = [];
-                    if (!config.students) config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
-                    config.students.forEach(s => { if (s.avatar === undefined) s.avatar = ''; });
+                    normalizeConfig();
                     
                     studentTimes = data.studentTimes || {};
                     currentTimes = data.currentTimes || [...defaultTimes];
@@ -638,7 +661,8 @@
                         currentTimes = getStudentTimes(config.currentStudentId);
                     }
 
-                    currentCells = data.currentCells || {};
+                    currentCells = data.currentCells && typeof data.currentCells === 'object' ? data.currentCells : {};
+                    normalizeConfig();
                     document.documentElement.style.setProperty('--accent', config.accentHex || '#6366f1');
                     document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
                     document.documentElement.style.setProperty('--bg-app', config.bgApp || '#0f172a');
@@ -660,14 +684,17 @@
         }
 
         function listenForRemoteChanges(userId) {
+            if (unsubscribeStateListener) {
+                unsubscribeStateListener();
+                unsubscribeStateListener = null;
+            }
+
             const stateRef = ref(db, 'users/' + userId + '/appState');
-            onValue(stateRef, (snapshot) => {
+            unsubscribeStateListener = onValue(stateRef, (snapshot) => {
                 if (snapshot.exists() && !isInitialLoad && !isLocalSaving) {
                     const data = snapshot.val();
                     config = data.config || config;
-                    if (!config.customStamps) config.customStamps = [];
-                    if (!config.students) config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
-                    config.students.forEach(s => { if (s.avatar === undefined) s.avatar = ''; });
+                    normalizeConfig();
 
                     studentTimes = data.studentTimes || {};
                     currentTimes = data.currentTimes || [...defaultTimes];
@@ -678,7 +705,8 @@
                         currentTimes = getStudentTimes(config.currentStudentId);
                     }
 
-                    currentCells = data.currentCells || {};
+                    currentCells = data.currentCells && typeof data.currentCells === 'object' ? data.currentCells : {};
+                    normalizeConfig();
 
                     document.documentElement.style.setProperty('--accent', config.accentHex || '#6366f1');
                     document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
@@ -733,6 +761,10 @@
         passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
 
         window.logoutUser = function() {
+            if (unsubscribeStateListener) {
+                unsubscribeStateListener();
+                unsubscribeStateListener = null;
+            }
             signOut(auth);
             loginForm.style.display = 'block';
             appContent.style.display = 'none';
@@ -762,9 +794,15 @@
                     showToast("Καλώς ήρθατε!", "👋");
                 });
             } else {
+                if (unsubscribeStateListener) {
+                    unsubscribeStateListener();
+                    unsubscribeStateListener = null;
+                }
                 loginForm.style.display = 'block';
                 appContent.style.display = 'none';
                 undoStack = [];
+                activeStamp = null;
+                activeSwapSourceId = null;
                 document.getElementById('undoBtn').disabled = true;
             }
         });
@@ -990,7 +1028,7 @@
                         title="Μονό κλικ: Εμφάνιση | Διπλό κλικ: Επεξεργασία">
                         ${deletePillBtn}
                         ${avatarImgHtml}
-                        <span class="max-w-[100px] truncate text-xs font-black mt-1.5">${s.name}</span>
+                        <span class="max-w-[100px] truncate text-xs font-black mt-1.5">${escapeHtml(s.name)}</span>
                         <button onclick="event.stopPropagation(); openStudentEditModal('${s.id}')" class="absolute top-1.5 right-1.5 text-[10px] opacity-70 hover:opacity-100 hover:text-accent-hover no-print bg-black/40 px-1 py-0.5 rounded-md" title="Επεξεργασία">📝</button>
                     </div>
                 `;
@@ -1047,6 +1085,11 @@
         };
 
         window.deleteHour = function(index) {
+            const times = getStudentTimes(config.currentStudentId);
+            if (times.length <= 1) {
+                showToast("Πρέπει να υπάρχει τουλάχιστον μία ώρα!", "⚠️");
+                return;
+            }
             openConfirm(
                 "Διαγραφή Ώρας;",
                 `Θέλετε σίγουρα να διαγράψετε την ${index + 1}η ώρα και όλο το περιεχόμενό της;`,
@@ -1136,10 +1179,7 @@
             showToast("Έγινε αναίρεση!", "↩️");
         };
 
-        window.openStampCreatorModal = function() {
-            document.getElementById('stampInputText').value = '';
-            document.getElementById('stampInputBg').value = '#1e3a8a';
-            document.getElementById('stampInputColor').value = '#93c5fd';
+        function resetStampImagePreview() {
             const fileInput = document.getElementById('stampImageUploadInput');
             fileInput.value = '';
             tempStampImageFile = null;
@@ -1150,6 +1190,37 @@
             document.getElementById('stampImagePreview').classList.add('hidden');
             document.getElementById('stampImagePlaceholder').classList.remove('hidden');
             document.getElementById('stampImagePreview').src = '';
+        }
+
+        window.openStampCreatorModal = function() {
+            document.getElementById('editingStampId').value = '';
+            document.getElementById('stampCreatorTitle').innerText = '🎨 Δημιουργία Σφραγίδας';
+            document.querySelector('#stampCreatorModal button[onclick="saveCreatedStamp()"]')?.replaceChildren(document.createTextNode('Προσθήκη'));
+            document.getElementById('stampInputText').value = '';
+            document.getElementById('stampInputBg').value = '#1e3a8a';
+            document.getElementById('stampInputColor').value = '#93c5fd';
+            resetStampImagePreview();
+            document.getElementById('stampCreatorModal').classList.remove('hidden');
+        };
+
+        window.openStampEditModal = function(stampId) {
+            const stamp = config.customStamps.find(item => item.id === stampId);
+            if (!stamp) return;
+
+            document.getElementById('editingStampId').value = stamp.id;
+            document.getElementById('stampCreatorTitle').innerText = '📝 Επεξεργασία Σφραγίδας';
+            document.querySelector('#stampCreatorModal button[onclick="saveCreatedStamp()"]')?.replaceChildren(document.createTextNode('Αποθήκευση'));
+            document.getElementById('stampInputText').value = stamp.text || '';
+            document.getElementById('stampInputBg').value = rgbToHex(stamp.bg || '#1e3a8a');
+            document.getElementById('stampInputColor').value = rgbToHex(stamp.textColor || '#93c5fd');
+            resetStampImagePreview();
+
+            if (stamp.img) {
+                const preview = document.getElementById('stampImagePreview');
+                preview.src = stamp.img;
+                preview.classList.remove('hidden');
+                document.getElementById('stampImagePlaceholder').classList.add('hidden');
+            }
             document.getElementById('stampCreatorModal').classList.remove('hidden');
         };
 
@@ -1186,7 +1257,7 @@
         };
 
         window.saveCreatedStamp = async function() {
-            saveUndoState();
+            const editingStampId = document.getElementById('editingStampId').value;
             const text = document.getElementById('stampInputText').value.trim();
             const bg = document.getElementById('stampInputBg').value;
             const textColor = document.getElementById('stampInputColor').value;
@@ -1195,32 +1266,40 @@
                 return;
             }
 
-            let imageUrl = '';
+            saveUndoState();
+            const existingStamp = config.customStamps.find(stamp => stamp.id === editingStampId);
+            let imageUrl = existingStamp?.img || '';
             if (tempStampImageFile) {
                 showToast("Ανέβασμα εικόνας...", "⏳");
                 const url = await uploadImageToImgBB(tempStampImageFile);
-                if (url) {
-                    imageUrl = url;
-                } else {
-                    showToast("Το ανέβασμα απέτυχε, η σφραγίδα θα δημιουργηθεί χωρίς εικόνα.", "⚠️");
-                }
+                if (url) imageUrl = url;
+                else showToast("Το ανέβασμα απέτυχε, η υπάρχουσα εικόνα διατηρήθηκε.", "⚠️");
+            } else if (editingStampId && document.getElementById('stampImagePreview').classList.contains('hidden')) {
+                imageUrl = '';
             }
 
-            const newStamp = {
-                id: 'stamp_' + Date.now(),
-                text: text,
-                bg: bg,
-                textColor: textColor,
-                img: imageUrl,
-                imgWidth: 48,
-                fontSize: 14
-            };
-
-            config.customStamps.push(newStamp);
+            if (existingStamp) {
+                existingStamp.text = text;
+                existingStamp.bg = bg;
+                existingStamp.textColor = textColor;
+                existingStamp.img = imageUrl;
+            } else {
+                config.customStamps.push({
+                    id: 'stamp_' + Date.now(),
+                    text,
+                    bg,
+                    textColor,
+                    img: imageUrl,
+                    imgWidth: imageUrl ? 92 : 48,
+                    fontSize: 14
+                });
+            }
             renderCustomStamps();
             closeStampCreatorModal();
             autoSaveToFirebase();
-            showToast("Η σφραγίδα δημιουργήθηκε!", "🎨");
+            showToast(existingStamp ? "Η σφραγίδα ενημερώθηκε!" : "Η σφραγίδα δημιουργήθηκε!", "🎨");
+            document.getElementById('editingStampId').value = '';
+            document.getElementById('stampCreatorTitle').innerText = '🎨 Δημιουργία Σφραγίδας';
             tempStampImageFile = null;
             if (tempStampPreviewURL) {
                 URL.revokeObjectURL(tempStampPreviewURL);
@@ -1269,11 +1348,11 @@
                 const contentHtml = s.img ? `
                     <div class="flex flex-col items-center gap-1.5 p-1 w-full">
                         <img src="${s.img}" class="w-16 h-16 object-contain rounded-lg bg-black/20 p-1 shadow-inner">
-                        <span class="text-xs font-extrabold truncate max-w-[100px]">${s.text}</span>
+                        <span class="text-xs font-extrabold truncate max-w-[100px]">${escapeHtml(s.text)}</span>
                     </div>
                 ` : `
                     <div class="px-3 py-2 text-sm font-extrabold truncate max-w-[120px]">
-                        ${s.text}
+                        ${escapeHtml(s.text)}
                     </div>
                 `;
 
@@ -1286,6 +1365,7 @@
                             class="stamp-btn ${activeRing} rounded-xl shadow-sm transition-all flex flex-col items-center justify-center p-2 min-w-[84px]">
                             ${contentHtml}
                         </button>
+                        <button onclick="openStampEditModal('${s.id}')" class="text-xs opacity-50 hover:opacity-100 hover:text-accent px-1.5 py-1 transition-colors" title="Επεξεργασία σφραγίδας">📝</button>
                         <button onclick="deleteStamp('${s.id}')" class="text-xs opacity-50 hover:opacity-100 hover:text-red-500 px-1.5 py-1 transition-colors" title="Διαγραφή σφραγίδας">✕</button>
                     </div>
                 `;
@@ -1704,7 +1784,7 @@
                             onblur="updateHourText(${rowIndex}, this.innerText)" 
                             class="text-sm font-extrabold focus:outline-none focus:ring-1 focus:ring-accent px-1.5 py-0.5 rounded cursor-text"
                             title="Κάντε κλικ για να επεξεργαστείτε την ώρα">
-                            ${time}
+                            ${escapeHtml(time)}
                         </div>
                         <button 
                             onclick="deleteHour(${rowIndex})" 
@@ -1810,7 +1890,7 @@
                                     onblur="handleCellInput(event, ${rowIndex}, ${col})"
                                     style="font-size: ${cellFontSize}px;"
                                     class="editable font-extrabold whitespace-pre-line focus:outline-none p-1.5 bg-slate-950/45 border border-slate-800 rounded-xl cursor-text min-h-[36px] max-h-[64px] overflow-y-auto text-center">
-                                    ${cellData.text || ''}
+                                    ${escapeHtml(cellData.text || '')}
                                 </div>
                             </div>
 
