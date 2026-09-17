@@ -30,7 +30,7 @@
              border-radius: 1.25rem; 
              background-color: var(--cell-bg);
              color: var(--cell-text);
-             touch-action: manipulation;
+             touch-action: none;
         }
         .cell button, .cell input, .cell [contenteditable="true"] {
              touch-action: manipulation;
@@ -525,6 +525,8 @@
         let activeStamp = null;
         let undoStack = [];
         let draggedCellId = null;
+        let touchDragState = null;
+        let suppressNextCellTap = false;
         let dragMode = 'swap';
         let activeSwapSourceId = null;
         let tempStampImageFile = null;
@@ -1616,6 +1618,10 @@
         };
 
         window.handleCellClick = function(row, col) {
+            if (suppressNextCellTap) {
+                suppressNextCellTap = false;
+                return;
+            }
             const cellKey = `${config.currentStudentId}_${row}_${col}`;
             if (activeStamp) {
                 saveUndoState();
@@ -1806,8 +1812,54 @@
 
         window.handleDragStart = function(e, row, col) {
             draggedCellId = `${row}_${col}`;
-            e.target.classList.add('dragging');
+            e.currentTarget.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedCellId);
+        };
+
+        window.handleTouchDragStart = function(e, row, col) {
+            if (e.target.closest('button, input, [contenteditable="true"]')) return;
+            const touch = e.touches[0];
+            touchDragState = {
+                sourceId: `${row}_${col}`,
+                startX: touch.clientX,
+                startY: touch.clientY,
+                active: false,
+                sourceCell: e.currentTarget
+            };
+        };
+
+        window.handleTouchDragMove = function(e) {
+            if (!touchDragState) return;
+            const touch = e.touches[0];
+            const distance = Math.hypot(
+                touch.clientX - touchDragState.startX,
+                touch.clientY - touchDragState.startY
+            );
+            if (distance < 10) return;
+            e.preventDefault();
+            touchDragState.active = true;
+            touchDragState.sourceCell.classList.add('dragging');
+            const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.cell');
+            document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('drag-over'));
+            if (target && target !== touchDragState.sourceCell) target.classList.add('drag-over');
+        };
+
+        window.handleTouchDragEnd = function(e) {
+            if (!touchDragState) return;
+            const state = touchDragState;
+            const touch = e.changedTouches[0];
+            const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.cell');
+            state.sourceCell.classList.remove('dragging');
+            document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('drag-over'));
+            touchDragState = null;
+            if (!state.active || !target || target === state.sourceCell) return;
+            suppressNextCellTap = true;
+            const targetRow = Number(target.dataset.row);
+            const targetCol = Number(target.dataset.col);
+            if (Number.isInteger(targetRow) && Number.isInteger(targetCol)) {
+                openMoveChoice(state.sourceId, `${targetRow}_${targetCol}`);
+            }
         };
         window.disableDrag = function(e) {
             e.stopPropagation();
@@ -1832,7 +1884,7 @@
             openMoveChoice(sourceId, `${row}_${col}`);
         };
         window.handleDragEnd = function(e) {
-            e.target.classList.remove('dragging');
+            e.currentTarget.classList.remove('dragging');
             document.querySelectorAll('.cell').forEach(c => c.classList.remove('drag-over'));
             draggedCellId = null;
         };
@@ -1969,11 +2021,16 @@
                     grid.innerHTML += `
                         <div 
                             draggable="true"
+                            data-row="${rowIndex}"
+                            data-col="${col}"
                             ondragstart="handleDragStart(event, ${rowIndex}, ${col})"
                             ondragover="handleDragOver(event, this)"
                             ondragleave="handleDragLeave(event, this)"
                             ondrop="handleDrop(event, ${rowIndex}, ${col})"
                             ondragend="handleDragEnd(event)"
+                            ontouchstart="handleTouchDragStart(event, ${rowIndex}, ${col})"
+                            ontouchmove="handleTouchDragMove(event)"
+                            ontouchend="handleTouchDragEnd(event)"
                             onclick="handleCellClick(${rowIndex}, ${col})"
                             ${customBgStyle}
                             class="cell ${isSwapSource} p-3 text-center flex flex-col justify-between relative group hover:scale-[1.01] hover:shadow-lg hover:border-slate-600 border border-transparent cursor-pointer overflow-hidden animate-fade-in">
