@@ -11,6 +11,8 @@
             --accent-hover: #4f46e5;
             --bg-app: #0f172a;
             --bg-card: #1e293b;
+            --cell-bg: #1e293b;
+            --cell-text: #f8fafc;
         }
         body { 
              background-color: var(--bg-app); 
@@ -26,7 +28,21 @@
              min-height: 250px; 
              transition: all 0.3s ease; 
              border-radius: 1.25rem; 
-             background-color: var(--bg-card); 
+             background-color: var(--cell-bg);
+             color: var(--cell-text);
+             touch-action: manipulation;
+        }
+        .cell button, .cell input, .cell [contenteditable="true"] {
+             touch-action: manipulation;
+        }
+        .editable {
+             font-size: 14px;
+             user-select: text;
+             -webkit-user-select: text;
+             touch-action: manipulation;
+        }
+        button, input, [contenteditable="true"] {
+             -webkit-tap-highlight-color: transparent;
         }
         .editable:focus { 
              outline: none; 
@@ -110,8 +126,8 @@
                 color: initial !important;
             }
             body.print-color .cell {
-                background-color: var(--bg-card) !important;
-                border: 2px solid var(--bg-card) !important;
+                background-color: var(--cell-bg) !important;
+                border: 2px solid var(--cell-bg) !important;
                 color: initial !important;
             }
             body.print-color .editable {
@@ -275,8 +291,12 @@
                 </div>
                 <div class="mb-6 bg-slate-900/50 p-4 rounded-2xl border border-slate-700/50">
                     <label class="block text-slate-300 text-sm font-bold mb-3 flex justify-between items-center">
-                        <span>Χρώμα Κουτιών (Κελιά):</span>
-                        <input type="color" id="cardBgColorPicker" oninput="applyCustomCardBackground(this.value)" class="w-10 h-10 cursor-pointer">
+                        <span>Χρώμα Φόντου Κελιών:</span>
+                        <input type="color" id="cellBgColorPicker" oninput="applyCustomCellBackground(this.value)" class="w-10 h-10 cursor-pointer">
+                    </label>
+                    <label class="block text-slate-300 text-sm font-bold flex justify-between items-center">
+                        <span>Χρώμα Γραμματοσειράς Κελιών:</span>
+                        <input type="color" id="cellTextColorPicker" oninput="applyCustomCellTextColor(this.value)" class="w-10 h-10 cursor-pointer">
                     </label>
                 </div>
                 <div class="flex justify-end gap-2 mt-8">
@@ -478,6 +498,8 @@
             accentHoverHex: '#4f46e5',
             bgApp: '#0f172a',
             bgCard: '#1e293b',
+            cellBg: '#1e293b',
+            cellTextColor: '#f8fafc',
             students: [{ id: 's1', name: 'Μαθητής 1', avatar: '' }],
             customStamps: []
         };
@@ -499,11 +521,17 @@
         let confirmCallback = null;
         let isInitialLoad = true;
         let isLocalSaving = false;
+        let saveQueue = Promise.resolve();
+        let saveRequested = false;
         let unsubscribeStateListener = null;
 
         const IMGBB_API_KEY = 'b1a8388f6b7c544529b95f37048a3c7e';
 
         function normalizeConfig() {
+            config.cellBg = config.cellBg || config.bgCard || '#1e293b';
+            config.cellTextColor = config.cellTextColor || '#f8fafc';
+            document.documentElement.style.setProperty('--cell-bg', config.cellBg);
+            document.documentElement.style.setProperty('--cell-text', config.cellTextColor);
             if (!Array.isArray(config.students) || config.students.length === 0) {
                 config.students = [{ id: 's1', name: 'Μαθητής 1', avatar: '' }];
             }
@@ -603,7 +631,11 @@
                     throw new Error('ImgBB upload failed');
                 }
                 const data = await response.json();
-                return data.data.url;
+                const imageUrl = data?.data?.display_url || data?.data?.url;
+                if (!imageUrl || !/^https?:\/\//i.test(imageUrl)) {
+                    throw new Error('ImgBB returned an invalid image URL');
+                }
+                return imageUrl;
             } catch (error) {
                 console.error('Σφάλμα μεταφόρτωσης ImgBB:', error);
                 return null;
@@ -611,22 +643,31 @@
         }
 
         function saveFullStateFromFirebase(userId) {
-            isLocalSaving = true;
-            const activeTimes = getStudentTimes(config.currentStudentId);
-            const payload = {
-                config: config,
-                studentTimes: studentTimes,
-                currentTimes: activeTimes,
-                currentCells: currentCells,
-            };
-            set(ref(db, 'users/' + userId + '/appState'), payload)
-                .catch((error) => {
+            saveRequested = true;
+            saveQueue = saveQueue.then(async () => {
+                if (!saveRequested) return;
+                saveRequested = false;
+                isLocalSaving = true;
+
+                // Create a snapshot so a later image upload cannot be overwritten by an older save.
+                const activeTimes = getStudentTimes(config.currentStudentId);
+                const payload = JSON.parse(JSON.stringify({
+                    config,
+                    studentTimes,
+                    currentTimes: activeTimes,
+                    currentCells
+                }));
+
+                try {
+                    await set(ref(db, 'users/' + userId + '/appState'), payload);
+                } catch (error) {
                     console.error('Σφάλμα αποθήκευσης στο Firebase:', error);
                     showToast("Σφάλμα αποθήκευσης!", "❌");
-                })
-                .finally(() => {
-                    setTimeout(() => { isLocalSaving = false; }, 300);
-                });
+                } finally {
+                    isLocalSaving = false;
+                }
+            });
+            return saveQueue;
         }
 
         function loadGlobalAppTitle() {
@@ -667,6 +708,10 @@
                     document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
                     document.documentElement.style.setProperty('--bg-app', config.bgApp || '#0f172a');
                     document.documentElement.style.setProperty('--bg-card', config.bgCard || '#1e293b');
+                    config.cellBg = config.cellBg || config.bgCard || '#1e293b';
+                    config.cellTextColor = config.cellTextColor || '#f8fafc';
+                    document.documentElement.style.setProperty('--cell-bg', config.cellBg);
+                    document.documentElement.style.setProperty('--cell-text', config.cellTextColor);
                     return true;
                 } else {
                     currentTimes = [...defaultTimes];
@@ -691,7 +736,7 @@
 
             const stateRef = ref(db, 'users/' + userId + '/appState');
             unsubscribeStateListener = onValue(stateRef, (snapshot) => {
-                if (snapshot.exists() && !isInitialLoad && !isLocalSaving) {
+                if (snapshot.exists() && !isInitialLoad) {
                     const data = snapshot.val();
                     config = data.config || config;
                     normalizeConfig();
@@ -712,6 +757,10 @@
                     document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
                     document.documentElement.style.setProperty('--bg-app', config.bgApp || '#0f172a');
                     document.documentElement.style.setProperty('--bg-card', config.bgCard || '#1e293b');
+                    config.cellBg = config.cellBg || config.bgCard || '#1e293b';
+                    config.cellTextColor = config.cellTextColor || '#f8fafc';
+                    document.documentElement.style.setProperty('--cell-bg', config.cellBg);
+                    document.documentElement.style.setProperty('--cell-text', config.cellTextColor);
                     if (config.appTitle) {
                         document.getElementById('appTitle').innerText = config.appTitle;
                     }
@@ -831,6 +880,18 @@
             document.documentElement.style.setProperty('--bg-card', hex);
             autoSaveToFirebase();
         };
+        window.applyCustomCellBackground = function(hex) {
+            config.cellBg = hex;
+            document.documentElement.style.setProperty('--cell-bg', hex);
+            renderGrid();
+            autoSaveToFirebase();
+        };
+        window.applyCustomCellTextColor = function(hex) {
+            config.cellTextColor = hex;
+            document.documentElement.style.setProperty('--cell-text', hex);
+            renderGrid();
+            autoSaveToFirebase();
+        };
         function adjustColorBrightness(hex, percent) {
             hex = rgbToHex(hex);
             let num = parseInt(hex.replace("#",""), 16),
@@ -844,7 +905,8 @@
         window.openSettingsModal = function() {
             document.getElementById('accentColorPicker').value = rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
             document.getElementById('bgColorPicker').value = rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--bg-app').trim());
-            document.getElementById('cardBgColorPicker').value = rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim());
+            document.getElementById('cellBgColorPicker').value = rgbToHex(config.cellBg || '#1e293b');
+            document.getElementById('cellTextColorPicker').value = rgbToHex(config.cellTextColor || '#f8fafc');
             document.getElementById('settingsModal').classList.remove('hidden');
         };
         window.closeSettingsModal = function() {
@@ -1165,6 +1227,10 @@
             document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
             document.documentElement.style.setProperty('--bg-app', config.bgApp || '#0f172a');
             document.documentElement.style.setProperty('--bg-card', config.bgCard || '#1e293b');
+            config.cellBg = config.cellBg || config.bgCard || '#1e293b';
+            config.cellTextColor = config.cellTextColor || '#f8fafc';
+            document.documentElement.style.setProperty('--cell-bg', config.cellBg);
+            document.documentElement.style.setProperty('--cell-text', config.cellTextColor);
             if (config.appTitle) {
                 document.getElementById('appTitle').innerText = config.appTitle;
             }
@@ -1542,6 +1608,7 @@
                     text: stampText,
                     bg: activeStamp.bg,
                     textColor: activeStamp.textColor,
+                    isStamp: true,
                     img: activeStamp.img || '',
                     imgWidth: activeStamp.img ? 92 : 48,
                     fontSize: activeStamp.fontSize || 14
@@ -1592,17 +1659,6 @@
             }
             currentCells[cellKey].bg = bgHex;
             currentCells[cellKey].textColor = textHex;
-            renderGrid();
-            autoSaveToFirebase();
-        };
-
-        window.changeCellFontSize = function(row, col, size) {
-            saveUndoState();
-            const cellKey = `${config.currentStudentId}_${row}_${col}`;
-            if (!currentCells[cellKey]) {
-                currentCells[cellKey] = { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
-            }
-            currentCells[cellKey].fontSize = parseInt(size, 10) || 14;
             renderGrid();
             autoSaveToFirebase();
         };
@@ -1809,12 +1865,11 @@
                     const cellKey = `${config.currentStudentId}_${rowIndex}_${col}`;
                     const cellData = currentCells[cellKey] || { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
                     
-                    const cellBg = cellData.bg ? cellData.bg : 'var(--bg-card)';
-                    const cellColor = cellData.textColor ? cellData.textColor : '#f8fafc';
-                    const customBgStyle = cellData.bg ? `style="background-color: ${cellBg}; color: ${cellColor};"` : '';
+                            const cellBg = cellData.bg ? cellData.bg : (config.cellBg || 'var(--bg-card)');
+                    const cellColor = cellData.textColor ? cellData.textColor : (config.cellTextColor || '#f8fafc');
+                    const customBgStyle = `style="background-color: ${cellBg}; color: ${cellColor};"`;
                     
                     const cellImgWidth = cellData.imgWidth || 48;
-                    const cellFontSize = cellData.fontSize || 14;
                     
                     let imgHtml = '';
                     if (cellData.img && cellData.img.trim() !== '') {
@@ -1860,30 +1915,7 @@
                             ${customBgStyle}
                             class="cell ${isSwapSource} p-3 text-center flex flex-col justify-between relative group hover:scale-[1.01] hover:shadow-lg hover:border-slate-600 border border-transparent cursor-pointer overflow-hidden animate-fade-in">
                             
-                            <div class="w-full flex flex-wrap items-center justify-between gap-1 mb-2 bg-slate-950/80 p-1.5 rounded-xl border border-slate-800/80 no-print" onmousedown="disableDrag(event)" onclick="event.stopPropagation()">
-                                <div class="flex items-center gap-1">
-                                    <input 
-                                        type="color" 
-                                        value="${rgbToHex(cellBg)}" 
-                                        onchange="changeCellColor(${rowIndex}, ${col}, this.value, '${rgbToHex(cellColor)}')" 
-                                        title="Χρώμα φόντου"
-                                        class="w-5 h-5 cursor-pointer">
-                                    <input 
-                                        type="color" 
-                                        value="${rgbToHex(cellColor)}" 
-                                        onchange="changeCellColor(${rowIndex}, ${col}, '${rgbToHex(cellBg)}', this.value)" 
-                                        title="Χρώμα γραμματοσειράς"
-                                        class="w-5 h-5 cursor-pointer">
-                                    <span class="text-[9px] font-bold text-slate-400 ml-0.5">Px:</span>
-                                    <input 
-                                        type="number" 
-                                        min="10" 
-                                        max="36" 
-                                        value="${cellFontSize}" 
-                                        onchange="changeCellFontSize(${rowIndex}, ${col}, this.value)" 
-                                        class="w-8 text-[10px] text-center font-bold bg-slate-900 border border-slate-700 rounded text-white py-0.5">
-                                </div>
-                                
+                                                            <div class="w-full flex flex-wrap items-center justify-end gap-1 mb-2 bg-slate-950/80 p-1.5 rounded-xl border border-slate-800/80 no-print" onmousedown="disableDrag(event)" onclick="event.stopPropagation()">
                                 <div class="flex items-center gap-0.5">
                                     <button onclick="event.stopPropagation(); speakCell(${rowIndex}, ${col})" class="p-1 bg-indigo-900/90 hover:bg-indigo-800 text-white rounded text-[10px]" title="Εκφώνηση">🔊</button>
                                     <button onclick="event.stopPropagation(); startInteractiveSwap(${rowIndex}, ${col})" class="p-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[10px]" title="Ανταλλαγή">🔄</button>
@@ -1898,7 +1930,6 @@
                                     contenteditable="true"
                                     onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); this.blur(); }"
                                     onblur="handleCellInput(event, ${rowIndex}, ${col})"
-                                    style="font-size: ${cellFontSize}px;"
                                     class="editable font-extrabold whitespace-pre-line focus:outline-none p-1.5 bg-slate-950/45 border border-slate-800 rounded-xl cursor-text min-h-[36px] max-h-[64px] overflow-y-auto text-center">
                                     ${escapeHtml(cellData.text || '')}
                                 </div>
