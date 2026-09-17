@@ -267,6 +267,7 @@
                     </button>
                 </div>
             </div>
+
         </header>
 
         <div class="w-full overflow-x-auto custom-scrollbar pb-2">
@@ -447,6 +448,19 @@
             </div>
         </div>
 
+        <div id="moveChoiceModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[65] flex items-center justify-center hidden no-print p-4">
+            <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center animate-fade-in">
+                <div class="text-4xl mb-4">📦</div>
+                <h4 class="text-lg font-black mb-2 text-white">Τι θέλετε να κάνετε;</h4>
+                <p class="text-slate-400 text-sm mb-6">Επιλέξτε πώς θα μεταφερθεί το περιεχόμενο στο κελί προορισμού.</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button id="moveSwapBtn" class="px-4 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-black text-sm text-white transition-all">🔄 Ανταλλαγή</button>
+                    <button id="moveCopyBtn" class="px-4 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-black text-sm text-white transition-all">📋 Αντιγραφή</button>
+                </div>
+                <button id="moveCancelBtn" class="mt-3 px-5 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-sm text-white transition-all">Ακύρωση</button>
+            </div>
+        </div>
+
         <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 border-2 border-accent text-white px-6 py-3 rounded-2xl shadow-2xl z-[100] transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none font-bold flex items-center gap-2 no-print">
             <span id="toastIcon">✨</span> <span id="toastText">Έγινε!</span>
         </div>
@@ -511,6 +525,7 @@
         let activeStamp = null;
         let undoStack = [];
         let draggedCellId = null;
+        let dragMode = 'swap';
         let activeSwapSourceId = null;
         let tempStampImageFile = null;
         let tempStampPreviewURL = null;
@@ -524,6 +539,7 @@
         let saveQueue = Promise.resolve();
         let saveRequested = false;
         let unsubscribeStateListener = null;
+        let pendingMove = null;
 
         const IMGBB_API_KEY = 'b1a8388f6b7c544529b95f37048a3c7e';
 
@@ -1620,10 +1636,12 @@
                 }, 400);
                 return;
             }
-            if (activeSwapSourceId !== null) {
+                        if (activeSwapSourceId !== null) {
                 const targetId = `${row}_${col}`;
                 if (activeSwapSourceId !== targetId) {
-                    swapCellsInteractive(activeSwapSourceId, targetId);
+                    openMoveChoice(activeSwapSourceId, targetId);
+                    activeSwapSourceId = null;
+                    renderGrid();
                 } else {
                     activeSwapSourceId = null;
                     renderGrid();
@@ -1701,11 +1719,67 @@
             }
         };
 
+        window.setDragMode = function(mode) {
+            dragMode = mode === 'copy' ? 'copy' : 'swap';
+            const swapBtn = document.getElementById('dragModeSwapBtn');
+            const copyBtn = document.getElementById('dragModeCopyBtn');
+            const hint = document.getElementById('dragModeHint');
+            const activeClasses = ['bg-indigo-600', 'text-white', 'ring-2', 'ring-white'];
+            const inactiveClasses = ['bg-slate-700', 'text-slate-300'];
+            [swapBtn, copyBtn].forEach(btn => {
+                btn.classList.remove(...activeClasses, ...inactiveClasses);
+            });
+            const activeButton = mode === 'copy' ? copyBtn : swapBtn;
+            const inactiveButton = mode === 'copy' ? swapBtn : copyBtn;
+            activeButton.classList.add(...activeClasses);
+            inactiveButton.classList.add(...inactiveClasses);
+            hint.textContent = mode === 'copy'
+                ? 'Το κελί προέλευσης αντιγράφεται στο κελί προορισμού.'
+                : 'Τα δύο κελιά ανταλλάσσονται μεταξύ τους.';
+        };
+
         window.startInteractiveSwap = function(row, col) {
             activeSwapSourceId = `${row}_${col}`;
             renderGrid();
-            showToast("Επιλέξτε ένα άλλο κελί για ανταλλαγή!", "🔄");
+            showToast(dragMode === 'copy' ? "Επιλέξτε κελί προορισμού για αντιγραφή!" : "Επιλέξτε ένα άλλο κελί για ανταλλαγή!", dragMode === 'copy' ? "📋" : "🔄");
         };
+
+        function openMoveChoice(sourceId, targetId) {
+            pendingMove = { sourceId, targetId };
+            document.getElementById('moveChoiceModal').classList.remove('hidden');
+        }
+
+        function closeMoveChoice() {
+            pendingMove = null;
+            document.getElementById('moveChoiceModal').classList.add('hidden');
+        }
+
+        document.getElementById('moveSwapBtn').onclick = () => {
+            if (pendingMove) swapCellsInteractive(pendingMove.sourceId, pendingMove.targetId);
+            closeMoveChoice();
+        };
+        document.getElementById('moveCopyBtn').onclick = () => {
+            if (pendingMove) copyCellInteractive(pendingMove.sourceId, pendingMove.targetId);
+            closeMoveChoice();
+        };
+        document.getElementById('moveCancelBtn').onclick = closeMoveChoice;
+
+        function copyCellInteractive(sourceId, targetId) {
+            saveUndoState();
+            const [sRow, sCol] = sourceId.split('_').map(Number);
+            const [tRow, tCol] = targetId.split('_').map(Number);
+            const sourceKey = `${config.currentStudentId}_${sRow}_${sCol}`;
+            const targetKey = `${config.currentStudentId}_${tRow}_${tCol}`;
+            if (currentCells[sourceKey]) {
+                currentCells[targetKey] = JSON.parse(JSON.stringify(currentCells[sourceKey]));
+            } else {
+                delete currentCells[targetKey];
+            }
+            activeSwapSourceId = null;
+            renderGrid();
+            autoSaveToFirebase();
+            showToast("Το κελί αντιγράφηκε!", "📋");
+        }
 
         function swapCellsInteractive(sourceId, targetId) {
             saveUndoState();
@@ -1740,6 +1814,7 @@
         };
         window.handleDragOver = function(e, cell) {
             e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
             cell.classList.add('drag-over');
         };
         window.handleDragLeave = function(e, cell) {
@@ -1747,26 +1822,14 @@
         };
         window.handleDrop = function(e, row, col) {
             e.preventDefault();
-            if (!draggedCellId) return;
-            const [sRow, sCol] = draggedCellId.split('_').map(Number);
+            e.stopPropagation();
+            const sourceId = draggedCellId;
+            draggedCellId = null;
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('drag-over'));
+            if (!sourceId) return;
+            const [sRow, sCol] = sourceId.split('_').map(Number);
             if (sRow === row && sCol === col) return;
-            saveUndoState();
-            const sourceKey = `${config.currentStudentId}_${sRow}_${sCol}`;
-            const targetKey = `${config.currentStudentId}_${row}_${col}`;
-            const temp = currentCells[sourceKey];
-            if (currentCells[targetKey]) {
-                currentCells[sourceKey] = currentCells[targetKey];
-            } else {
-                delete currentCells[sourceKey];
-            }
-            if (temp) {
-                currentCells[targetKey] = temp;
-            } else {
-                delete currentCells[targetKey];
-            }
-            renderGrid();
-            autoSaveToFirebase();
-            showToast("Το μάθημα μετακινήθηκε!", "🔄");
+            openMoveChoice(sourceId, `${row}_${col}`);
         };
         window.handleDragEnd = function(e) {
             e.target.classList.remove('dragging');
@@ -1918,7 +1981,6 @@
                                                             <div class="w-full flex flex-wrap items-center justify-end gap-1 mb-2 bg-slate-950/80 p-1.5 rounded-xl border border-slate-800/80 no-print" onmousedown="disableDrag(event)" onclick="event.stopPropagation()">
                                 <div class="flex items-center gap-0.5">
                                     <button onclick="event.stopPropagation(); speakCell(${rowIndex}, ${col})" class="p-1 bg-indigo-900/90 hover:bg-indigo-800 text-white rounded text-[10px]" title="Εκφώνηση">🔊</button>
-                                    <button onclick="event.stopPropagation(); startInteractiveSwap(${rowIndex}, ${col})" class="p-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[10px]" title="Ανταλλαγή">🔄</button>
                                     <button onclick="event.stopPropagation(); clearSingleCell(${rowIndex}, ${col})" class="p-1 bg-red-600/90 hover:bg-red-600 text-white rounded text-[10px]" title="Καθαρισμός">🗑️</button>
                                 </div>
                             </div>
