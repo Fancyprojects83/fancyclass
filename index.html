@@ -1523,6 +1523,16 @@
             window.saveCellImageWidth(row, col, width);
         };
 
+        window.handleCellSurfaceClick = function(event, row, col) {
+            if (activeStamp) {
+                event.preventDefault();
+                event.stopPropagation();
+                handleCellClick(row, col);
+            } else {
+                event.stopPropagation();
+            }
+        };
+
         window.handleCellClick = function(row, col) {
             const cellKey = `${config.currentStudentId}_${row}_${col}`;
             if (activeStamp) {
@@ -1881,7 +1891,7 @@
                                 </div>
                             </div>
 
-                            <div class="w-full mb-2" onmousedown="disableDrag(event)" onclick="event.stopPropagation()">
+                            <div class="w-full mb-2" onmousedown="disableDrag(event)" onclick="handleCellSurfaceClick(event, ${rowIndex}, ${col})">
                                 <span class="text-[9px] uppercase font-bold text-slate-400 block mb-0.5 text-left pl-1">Μάθημα:</span>
                                 <div 
                                     id="text-${rowIndex}-${col}"
