@@ -35,6 +35,9 @@
         .cell button, .cell input, .cell [contenteditable="true"] {
              touch-action: manipulation;
         }
+        .hour-cell {
+             touch-action: none;
+        }
         .editable {
              font-size: 14px;
              user-select: text;
@@ -138,6 +141,20 @@
             }
             body.print-color .preview-img {
                 max-height: 110px !important;
+            }
+            body.print-hide-images .preview-img,
+            body.print-hide-images .cell-slider-container {
+                display: none !important;
+            }
+            body.print-hide-empty .cell.print-empty-cell {
+                visibility: hidden !important;
+            }
+            @page {
+                size: auto;
+                margin: 10mm;
+            }
+            body.print-portrait #scheduleGrid {
+                grid-template-columns: repeat(3, 1fr) !important;
             }
         }
 
@@ -246,7 +263,7 @@
                     <div id="activeStudentHeaderPhotoContainer" class="hidden">
                         <img id="activeStudentHeaderPhoto" class="w-10 h-10 rounded-full object-cover border-2 border-accent" src="" alt="Avatar">
                     </div>
-                    <input type="text" id="studentName" placeholder="Όνομα Μαθητή..." onfocus="saveUndoState()" oninput="autoSave()" class="text-lg px-3 py-1.5 bg-slate-900 focus:outline-none border-b-2 border-accent rounded-lg font-bold text-white w-56">
+                    <input type="text" id="studentName" placeholder="Όνομα Μαθητή..." onfocus="beginStudentNameEdit(this)" oninput="autoSave()" onblur="finishStudentNameEdit(this)" class="text-lg px-3 py-1.5 bg-slate-900 focus:outline-none border-b-2 border-accent rounded-lg font-bold text-white w-56">
                 </div>
                 <div class="flex flex-wrap gap-2 items-center">
                     <button onclick="addHour()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm flex items-center gap-1">
@@ -258,11 +275,7 @@
                     <button onclick="clearCurrentBoardRequest()" class="bg-red-600/80 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm">
                         🗑️ Εκκαθάριση
                     </button>
-                    <label class="flex items-center gap-1 bg-slate-700/60 px-3 py-2 rounded-xl cursor-pointer text-sm font-bold text-slate-300">
-                        <input type="checkbox" id="printColorCheck" class="w-4 h-4 accent-accent"> 
-                        <span>🌈 Έγχρωμη</span>
-                    </label>
-                    <button onclick="triggerPrint()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm flex items-center gap-1">
+                    <button onclick="openPrintCenter()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm flex items-center gap-1">
                         🖨️ Εκτύπωση
                     </button>
                 </div>
@@ -275,6 +288,37 @@
         </div>
 
         <!-- MODALS -->
+        <div id="printCenterModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print p-4">
+            <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+                <h3 class="text-xl font-black mb-5 flex items-center gap-2">🖨️ Κέντρο Εκτύπωσης</h3>
+                <div class="space-y-4">
+                    <label class="block text-sm font-bold text-slate-300">Μορφή εκτύπωσης
+                        <select id="printLayout" class="mt-1 w-full p-3 bg-slate-900 border border-slate-700 rounded-xl text-white">
+                            <option value="grid">📅 Εβδομαδιαίος πίνακας</option>
+                        </select>
+                    </label>
+                    <label class="block text-sm font-bold text-slate-300">Προσανατολισμός
+                        <select id="printOrientation" class="mt-1 w-full p-3 bg-slate-900 border border-slate-700 rounded-xl text-white">
+                            <option value="landscape">Οριζόντιος</option>
+                            <option value="portrait">Κατακόρυφος</option>
+                        </select>
+                    </label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="flex items-center gap-2 bg-slate-900/60 p-3 rounded-xl text-sm font-bold text-slate-300">
+                            <input type="checkbox" id="printImages" checked class="w-4 h-4 accent-accent"> Εικόνες
+                        </label>
+                        <label class="flex items-center gap-2 bg-slate-900/60 p-3 rounded-xl text-sm font-bold text-slate-300">
+                            <input type="checkbox" id="printEmptyCells" checked class="w-4 h-4 accent-accent"> Κενά κελιά
+                        </label>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-7">
+                    <button onclick="closePrintCenter()" class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold text-sm">Ακύρωση</button>
+                    <button onclick="applyPrintCenter()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl font-black text-sm text-white">Προεπισκόπηση / Εκτύπωση</button>
+                </div>
+            </div>
+        </div>
+
         <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center hidden no-print p-4">
             <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl">
                 <h3 class="text-xl font-black mb-6 flex items-center gap-2">⚙️ Ρυθμίσεις Εμφάνισης</h3>
@@ -526,6 +570,8 @@
         let undoStack = [];
         let draggedCellId = null;
         let touchDragState = null;
+        let draggedHourIndex = null;
+        let touchHourDragState = null;
         let suppressNextCellTap = false;
         let dragMode = 'swap';
         let activeSwapSourceId = null;
@@ -540,12 +586,17 @@
         let isLocalSaving = false;
         let saveQueue = Promise.resolve();
         let saveRequested = false;
+        let saveGeneration = 0;
+        let activeSaveUserId = null;
         let unsubscribeStateListener = null;
+        let unsubscribeGlobalTitle = null;
         let pendingMove = null;
+        let studentNameUndoValue = '';
 
         const IMGBB_API_KEY = 'b1a8388f6b7c544529b95f37048a3c7e';
 
         function normalizeConfig() {
+            if (!config || typeof config !== 'object') config = {};
             config.cellBg = config.cellBg || config.bgCard || '#1e293b';
             config.cellTextColor = config.cellTextColor || '#f8fafc';
             document.documentElement.style.setProperty('--cell-bg', config.cellBg);
@@ -629,9 +680,10 @@
             confirmCallback = null;
         };
         document.getElementById('confirmActionBtn').onclick = () => {
-            if (confirmCallback) confirmCallback();
+            const callback = confirmCallback;
             document.getElementById('confirmModal').classList.add('hidden');
             confirmCallback = null;
+            if (callback) callback();
         };
 
         async function uploadImageToImgBB(file) {
@@ -661,13 +713,16 @@
         }
 
         function saveFullStateFromFirebase(userId) {
+            if (!userId || userId !== auth.currentUser?.uid) return Promise.resolve();
             saveRequested = true;
-            saveQueue = saveQueue.then(async () => {
-                if (!saveRequested) return;
+            activeSaveUserId = userId;
+            const generation = ++saveGeneration;
+            saveQueue = saveQueue.catch(() => undefined).then(async () => {
+                if (!saveRequested || generation !== saveGeneration || activeSaveUserId !== userId || userId !== auth.currentUser?.uid) return;
                 saveRequested = false;
                 isLocalSaving = true;
 
-                // Create a snapshot so a later image upload cannot be overwritten by an older save.
+                // Create a snapshot so a later image upload cannot overwrite a newer save.
                 const activeTimes = getStudentTimes(config.currentStudentId);
                 const payload = JSON.parse(JSON.stringify({
                     config,
@@ -688,18 +743,20 @@
             return saveQueue;
         }
 
-        function loadGlobalAppTitle() {
-            const titleRef = ref(db, 'appConfig/appTitle');
-            onValue(titleRef, (snapshot) => {
-                if (snapshot.exists()) {
-                    const title = snapshot.val();
-                    config.appTitle = title;
-                    document.getElementById('appTitle').innerText = title;
-                } else {
-                    set(titleRef, 'FancyClass');
-                    config.appTitle = 'FancyClass';
-                    document.getElementById('appTitle').innerText = 'FancyClass';
-                }
+        function loadGlobalAppTitle(userId) {
+            if (unsubscribeGlobalTitle) {
+                unsubscribeGlobalTitle();
+                unsubscribeGlobalTitle = null;
+            }
+            if (!userId) return;
+            const titleRef = ref(db, 'users/' + userId + '/appState/config/appTitle');
+            unsubscribeGlobalTitle = onValue(titleRef, (snapshot) => {
+                if (userId !== auth.currentUser?.uid) return;
+                const title = snapshot.exists() && typeof snapshot.val() === 'string' ? snapshot.val() : 'FancyClass';
+                config.appTitle = title;
+                document.getElementById('appTitle').innerText = title;
+            }, (error) => {
+                console.error('Σφάλμα φόρτωσης τίτλου:', error);
             });
         }
 
@@ -754,12 +811,14 @@
 
             const stateRef = ref(db, 'users/' + userId + '/appState');
             unsubscribeStateListener = onValue(stateRef, (snapshot) => {
+                if (userId !== auth.currentUser?.uid) return;
+                if (isLocalSaving) return;
                 if (snapshot.exists() && !isInitialLoad) {
                     const data = snapshot.val();
-                    config = data.config || config;
+                    config = data.config && typeof data.config === 'object' ? data.config : config;
                     normalizeConfig();
 
-                    studentTimes = data.studentTimes || {};
+                    studentTimes = data.studentTimes && typeof data.studentTimes === 'object' ? data.studentTimes : {};
                     currentTimes = data.currentTimes || [...defaultTimes];
                     if (Object.keys(studentTimes).length === 0) {
                         const activeId = config.currentStudentId || 's1';
@@ -787,7 +846,6 @@
                     renderCustomStamps();
                     renderGrid();
                     updateHeaderDetails();
-                    showToast("Συγχρονίστηκε με το cloud!", "🔄");
                 }
                 isInitialLoad = false;
             }, (error) => {
@@ -828,10 +886,19 @@
         passwordInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });
 
         window.logoutUser = function() {
+            closeMoveChoice();
             if (unsubscribeStateListener) {
                 unsubscribeStateListener();
                 unsubscribeStateListener = null;
             }
+            if (unsubscribeGlobalTitle) {
+                unsubscribeGlobalTitle();
+                unsubscribeGlobalTitle = null;
+            }
+            saveRequested = false;
+            saveGeneration++;
+            activeSaveUserId = null;
+            saveQueue = Promise.resolve();
             signOut(auth);
             loginForm.style.display = 'block';
             appContent.style.display = 'none';
@@ -851,7 +918,7 @@
                 config.customStamps = [];
 
                 isInitialLoad = true;
-                loadGlobalAppTitle();
+                loadGlobalAppTitle(user.uid);
                 loadFullStateFromFirebase(user.uid).then(() => {
                     listenForRemoteChanges(user.uid);
                     renderStudentPills();
@@ -865,6 +932,14 @@
                     unsubscribeStateListener();
                     unsubscribeStateListener = null;
                 }
+                if (unsubscribeGlobalTitle) {
+                    unsubscribeGlobalTitle();
+                    unsubscribeGlobalTitle = null;
+                }
+                saveRequested = false;
+                saveGeneration++;
+                activeSaveUserId = null;
+                saveQueue = Promise.resolve();
                 loginForm.style.display = 'block';
                 appContent.style.display = 'none';
                 undoStack = [];
@@ -876,7 +951,6 @@
 
         window.saveAppTitle = function(text) {
             config.appTitle = text.trim() || 'FancyClass';
-            set(ref(db, 'appConfig/appTitle'), config.appTitle).catch(err => console.error(err));
             autoSaveToFirebase();
             showToast("Ο τίτλος ενημερώθηκε!", "✏️");
         };
@@ -981,7 +1055,6 @@
         };
 
         window.saveCreatedStudent = async function() {
-            saveUndoState();
             const name = document.getElementById('studentInputText').value.trim();
             const bg = document.getElementById('studentInputBg').value;
             const textColor = document.getElementById('studentInputColor').value;
@@ -989,6 +1062,7 @@
                 showToast("Παρακαλώ εισάγετε όνομα μαθητή!", "⚠️");
                 return;
             }
+            saveUndoState();
 
             let avatarUrl = '';
             if (tempStudentImageFile) {
@@ -997,7 +1071,7 @@
                 if (url) {
                     avatarUrl = url;
                 } else {
-                    showToast("Το ανέβασμα απέτυχες, ο μαθητής θα δημιουργηθεί χωρίς φωτογραφία.", "⚠️");
+                    showToast("Το ανέβασμα απέτυχε, ο μαθητής θα δημιουργηθεί χωρίς φωτογραφία.", "⚠️");
                 }
             }
 
@@ -1086,13 +1160,13 @@
             config.students.forEach(s => {
                 const isActive = s.id === config.currentStudentId;
                 const activeRing = isActive ? 'ring-4 ring-white shadow-xl scale-105' : '';
-                const styleAttr = s.bg ? `style="background-color: ${s.bg}; color: ${s.textColor || '#ffffff'};"` : '';
+                const styleAttr = s.bg ? `style="background-color: ${rgbToHex(s.bg)}; color: ${rgbToHex(s.textColor || '#ffffff')};"` : '';
                 const pillClass = s.bg 
                     ? `${activeRing} border-2 border-white/20` 
                     : (isActive ? `bg-slate-800 text-white border-2 border-accent ${activeRing}` : `bg-slate-900/90 text-slate-300 border border-slate-700/80 hover:border-slate-500`);
                 
                 const avatarImgHtml = s.avatar 
-                    ? `<img class="w-16 h-16 rounded-xl object-cover shadow-md" src="${s.avatar}" alt="Avatar">` 
+                    ? `<img class="w-16 h-16 rounded-xl object-cover shadow-md" src="${escapeHtml(s.avatar)}" alt="Avatar">` 
                     : `<div class="w-16 h-16 rounded-xl bg-slate-950/60 flex items-center justify-center text-2xl shadow-inner">👤</div>`;
                 
                 const deletePillBtn = config.students.length > 1 ? `
@@ -1131,14 +1205,29 @@
         }
         window.updateHeaderDetails = updateHeaderDetails;
 
-        window.autoSave = function() {
-            const newName = document.getElementById('studentName').value.trim();
+        window.beginStudentNameEdit = function(input) {
             const student = config.students.find(s => s.id === config.currentStudentId);
-            if (student && newName) {
+            studentNameUndoValue = student ? student.name : input.value;
+        };
+
+        window.finishStudentNameEdit = function(input) {
+            const student = config.students.find(s => s.id === config.currentStudentId);
+            const newName = input.value.trim();
+            if (student && newName && newName !== studentNameUndoValue) {
+                saveUndoState();
                 student.name = newName;
                 renderStudentPills();
                 autoSaveToFirebase();
+            } else if (student) {
+                input.value = student.name;
             }
+            studentNameUndoValue = '';
+        };
+
+        window.autoSave = function() {
+            const newName = document.getElementById('studentName').value.trim();
+            const student = config.students.find(s => s.id === config.currentStudentId);
+            if (student && newName) student.name = newName;
         };
 
         window.updateHourText = function(rowIndex, text) {
@@ -1350,8 +1439,8 @@
                 return;
             }
 
-            saveUndoState();
             const existingStamp = config.customStamps.find(stamp => stamp.id === editingStampId);
+            saveUndoState();
             let imageUrl = existingStamp?.img || '';
             if (tempStampImageFile) {
                 showToast("Ανέβασμα εικόνας...", "⏳");
@@ -1431,7 +1520,7 @@
                 const activeRing = (activeStamp && activeStamp.id === s.id) ? 'ring-4 ring-white' : '';
                 const contentHtml = s.img ? `
                     <div class="flex flex-col items-center gap-1.5 p-1 w-full">
-                        <img src="${s.img}" class="w-16 h-16 object-contain rounded-lg bg-black/20 p-1 shadow-inner">
+                        <img src="${escapeHtml(s.img)}" class="w-16 h-16 object-contain rounded-lg bg-black/20 p-1 shadow-inner">
                         <span class="text-xs font-extrabold truncate max-w-[100px]">${escapeHtml(s.text)}</span>
                     </div>
                 ` : `
@@ -1445,7 +1534,7 @@
                         <button 
                             id="btn-${s.id}" 
                             onclick="selectStamp('${s.id}')"
-                            style="background-color: ${s.bg}; color: ${s.textColor};"
+                            style="background-color: ${rgbToHex(s.bg)}; color: ${rgbToHex(s.textColor)};"
                             class="stamp-btn ${activeRing} rounded-xl shadow-sm transition-all flex flex-col items-center justify-center p-2 min-w-[84px]">
                             ${contentHtml}
                         </button>
@@ -1474,6 +1563,8 @@
             } else {
                 preview.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'/></svg>";
             }
+            const avatarInput = document.getElementById('studentAvatarInput');
+            if (avatarInput) avatarInput.value = '';
             document.getElementById('studentEditModal').classList.remove('hidden');
         };
 
@@ -1498,6 +1589,8 @@
         };
 
         window.removeStudentAvatar = function() {
+            const fileInput = document.getElementById('studentAvatarInput');
+            if (fileInput) fileInput.value = '';
             tempAvatarFile = null;
             if (tempAvatarPreviewURL) {
                 URL.revokeObjectURL(tempAvatarPreviewURL);
@@ -1507,7 +1600,6 @@
         };
 
         window.saveStudentEdit = async function() {
-            saveUndoState();
             const id = document.getElementById('editStudentId').value;
             const name = document.getElementById('editStudentName').value.trim();
             const bg = document.getElementById('editStudentBg').value;
@@ -1517,6 +1609,11 @@
                 return;
             }
             const student = config.students.find(s => s.id === id);
+            if (!student) {
+                showToast("Ο μαθητής δεν βρέθηκε.", "⚠️");
+                return;
+            }
+            saveUndoState();
             if (student) {
                 student.name = name;
                 student.bg = bg;
@@ -1730,6 +1827,7 @@
             const swapBtn = document.getElementById('dragModeSwapBtn');
             const copyBtn = document.getElementById('dragModeCopyBtn');
             const hint = document.getElementById('dragModeHint');
+            if (!swapBtn || !copyBtn || !hint) return;
             const activeClasses = ['bg-indigo-600', 'text-white', 'ring-2', 'ring-white'];
             const inactiveClasses = ['bg-slate-700', 'text-slate-300'];
             [swapBtn, copyBtn].forEach(btn => {
@@ -1757,7 +1855,9 @@
 
         function closeMoveChoice() {
             pendingMove = null;
+            activeSwapSourceId = null;
             document.getElementById('moveChoiceModal').classList.add('hidden');
+            document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('active-swap-source'));
         }
 
         document.getElementById('moveSwapBtn').onclick = () => {
@@ -1809,6 +1909,104 @@
             autoSaveToFirebase();
             showToast("Τα κελιά ανταλλάχθηκαν!", "🔄");
         }
+
+        function swapHourRows(sourceIndex, targetIndex) {
+            if (sourceIndex === targetIndex) return;
+            saveUndoState();
+            const studentId = config.currentStudentId;
+            const times = getStudentTimes(studentId);
+            [times[sourceIndex], times[targetIndex]] = [times[targetIndex], times[sourceIndex]];
+
+            for (let col = 1; col <= 5; col++) {
+                const sourceKey = `${studentId}_${sourceIndex}_${col}`;
+                const targetKey = `${studentId}_${targetIndex}_${col}`;
+                const sourceCell = currentCells[sourceKey];
+                const targetCell = currentCells[targetKey];
+                if (targetCell) currentCells[sourceKey] = targetCell;
+                else delete currentCells[sourceKey];
+                if (sourceCell) currentCells[targetKey] = sourceCell;
+                else delete currentCells[targetKey];
+            }
+
+            currentTimes = times;
+            renderGrid();
+            autoSaveToFirebase();
+            showToast("Οι ώρες μετακινήθηκαν μαζί με τα μαθήματά τους!", "⏱️");
+        }
+
+        window.handleHourDragStart = function(e, rowIndex) {
+            draggedHourIndex = rowIndex;
+            e.currentTarget.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', String(rowIndex));
+        };
+
+        window.handleHourDragOver = function(e, hourCell) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            hourCell.classList.add('drag-over');
+        };
+
+        window.handleHourDragLeave = function(e, hourCell) {
+            hourCell.classList.remove('drag-over');
+        };
+
+        window.handleHourDrop = function(e, targetIndex) {
+            e.preventDefault();
+            e.stopPropagation();
+            const sourceIndex = draggedHourIndex;
+            draggedHourIndex = null;
+            document.querySelectorAll('.hour-cell').forEach(cell => cell.classList.remove('dragging', 'drag-over'));
+            if (Number.isInteger(sourceIndex) && sourceIndex !== targetIndex) {
+                swapHourRows(sourceIndex, targetIndex);
+            }
+        };
+
+        window.handleHourDragEnd = function(e) {
+            e.currentTarget.classList.remove('dragging');
+            document.querySelectorAll('.hour-cell').forEach(cell => cell.classList.remove('drag-over'));
+            draggedHourIndex = null;
+        };
+
+        window.handleHourTouchStart = function(e, rowIndex) {
+            if (e.target.closest('button, input, [contenteditable="true"]')) return;
+            const touch = e.touches[0];
+            touchHourDragState = {
+                rowIndex,
+                startX: touch.clientX,
+                startY: touch.clientY,
+                active: false,
+                sourceCell: e.currentTarget
+            };
+        };
+
+        window.handleHourTouchMove = function(e) {
+            if (!touchHourDragState) return;
+            const touch = e.touches[0];
+            const distance = Math.hypot(touch.clientX - touchHourDragState.startX, touch.clientY - touchHourDragState.startY);
+            if (distance < 10) return;
+            e.preventDefault();
+            touchHourDragState.active = true;
+            touchHourDragState.sourceCell.classList.add('dragging');
+            const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.hour-cell');
+            document.querySelectorAll('.hour-cell').forEach(cell => cell.classList.remove('drag-over'));
+            if (target && target !== touchHourDragState.sourceCell) target.classList.add('drag-over');
+        };
+
+        window.handleHourTouchEnd = function(e) {
+            if (!touchHourDragState) return;
+            const state = touchHourDragState;
+            const touch = e.changedTouches[0];
+            const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.hour-cell');
+            state.sourceCell.classList.remove('dragging');
+            document.querySelectorAll('.hour-cell').forEach(cell => cell.classList.remove('drag-over'));
+            touchHourDragState = null;
+            if (!state.active || !target || target === state.sourceCell) return;
+            const targetIndex = Number(target.dataset.hourIndex);
+            if (Number.isInteger(targetIndex) && targetIndex !== state.rowIndex) {
+                swapHourRows(state.rowIndex, targetIndex);
+            }
+        };
 
         window.handleDragStart = function(e, row, col) {
             draggedCellId = `${row}_${col}`;
@@ -1921,13 +2119,36 @@
             }
         };
 
-        window.triggerPrint = function() {
-            const printColor = document.getElementById('printColorCheck').checked;
-            if (printColor) {
-                document.body.classList.add('print-color');
-            } else {
-                document.body.classList.remove('print-color');
+        window.openPrintCenter = function() {
+            document.getElementById('printCenterModal').classList.remove('hidden');
+        };
+
+        window.closePrintCenter = function() {
+            document.getElementById('printCenterModal').classList.add('hidden');
+        };
+
+        window.applyPrintCenter = function() {
+            const layout = document.getElementById('printLayout').value;
+            const orientation = document.getElementById('printOrientation').value;
+            document.body.classList.toggle('print-hide-images', !document.getElementById('printImages').checked);
+            document.body.classList.toggle('print-hide-empty', !document.getElementById('printEmptyCells').checked);
+            document.body.classList.toggle('print-portrait', orientation === 'portrait');
+            let printStyle = document.getElementById('dynamicPrintStyle');
+            if (!printStyle) {
+                printStyle = document.createElement('style');
+                printStyle.id = 'dynamicPrintStyle';
+                document.head.appendChild(printStyle);
             }
+            printStyle.textContent = `@media print { @page { size: ${orientation}; } }`;
+            closePrintCenter();
+            setTimeout(() => {
+                window.print();
+                document.body.classList.remove('print-list', 'print-hide-images', 'print-hide-empty', 'print-portrait');
+                document.body.classList.remove('print-color');
+            }, 200);
+        };
+
+        window.triggerPrint = function() {
             try {
                 window.focus();
                 setTimeout(() => { 
@@ -1958,7 +2179,18 @@
 
             times.forEach((time, rowIndex) => {
                 grid.innerHTML += `
-                    <div class="relative group bg-slate-900/60 p-4 rounded-2xl border border-slate-800 flex flex-col justify-center items-center text-center">
+                    <div 
+                        draggable="true"
+                        data-hour-index="${rowIndex}"
+                        class="relative group hour-cell bg-slate-900/60 p-4 rounded-2xl border border-slate-800 flex flex-col justify-center items-center text-center cursor-grab active:cursor-grabbing"
+                        ondragstart="handleHourDragStart(event, ${rowIndex})"
+                        ondragover="handleHourDragOver(event, this)"
+                        ondragleave="handleHourDragLeave(event, this)"
+                        ondrop="handleHourDrop(event, ${rowIndex})"
+                        ondragend="handleHourDragEnd(event)"
+                        ontouchstart="handleHourTouchStart(event, ${rowIndex})"
+                        ontouchmove="handleHourTouchMove(event)"
+                        ontouchend="handleHourTouchEnd(event)">
                         <div 
                             contenteditable="true" 
                             onkeydown="if(event.key==='Enter'){ event.preventDefault(); this.blur(); }"
@@ -1968,7 +2200,7 @@
                             ${escapeHtml(time)}
                         </div>
                         <button 
-                            onclick="deleteHour(${rowIndex})" 
+                            onclick="event.stopPropagation(); deleteHour(${rowIndex})" 
                             class="absolute -top-1.5 -left-1.5 w-6 h-6 bg-red-600/90 text-white rounded-full text-xs font-bold hover:scale-110 opacity-0 group-hover:opacity-100 transition-all no-print flex items-center justify-center shadow-md"
                             title="Διαγραφή ώρας">
                             ✕
@@ -1980,8 +2212,9 @@
                     const cellKey = `${config.currentStudentId}_${rowIndex}_${col}`;
                     const cellData = currentCells[cellKey] || { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
                     
-                            const cellBg = cellData.bg ? cellData.bg : (config.cellBg || 'var(--bg-card)');
-                    const cellColor = cellData.textColor ? cellData.textColor : (config.cellTextColor || '#f8fafc');
+                            const cellBg = rgbToHex(cellData.bg || config.cellBg || '#1e293b');
+                    const cellColor = rgbToHex(cellData.textColor || config.cellTextColor || '#f8fafc');
+                    const isEmptyCell = !String(cellData.text || '').trim() && !String(cellData.img || '').trim();
                     const customBgStyle = `style="background-color: ${cellBg}; color: ${cellColor};"`;
                     
                     const cellImgWidth = cellData.imgWidth || 48;
@@ -1990,7 +2223,7 @@
                     if (cellData.img && cellData.img.trim() !== '') {
                         imgHtml = `
                             <div class="relative group/img flex flex-col items-center w-full">
-                                <img id="img-${rowIndex}-${col}" src="${cellData.img}" style="width: ${cellImgWidth}px;" class="preview-img max-h-[100px]" alt="Image">
+                                <img id="img-${rowIndex}-${col}" src="${escapeHtml(cellData.img)}" style="width: ${cellImgWidth}px;" class="preview-img max-h-[100px]" alt="Image">
                                 <button onclick="event.stopPropagation(); removeCellImage(${rowIndex}, ${col})" class="absolute top-0 right-0 bg-red-600 hover:bg-red-500 text-white text-[9px] px-1.5 rounded-full opacity-100 transition-opacity no-print" title="Αφαίρεση εικόνας">✕</button>
                                 <div class="w-full mt-2 no-print cell-slider-container flex items-center gap-1 bg-slate-950/90 p-1.5 rounded-lg border border-slate-800" onmousedown="disableDrag(event)" onclick="event.stopPropagation()">
                                     <span class="text-[9px] text-slate-400 font-bold">↔️</span>
@@ -2033,7 +2266,7 @@
                             ontouchend="handleTouchDragEnd(event)"
                             onclick="handleCellClick(${rowIndex}, ${col})"
                             ${customBgStyle}
-                            class="cell ${isSwapSource} p-3 text-center flex flex-col justify-between relative group hover:scale-[1.01] hover:shadow-lg hover:border-slate-600 border border-transparent cursor-pointer overflow-hidden animate-fade-in">
+                            class="cell ${isEmptyCell ? 'print-empty-cell ' : ''}${isSwapSource} p-3 text-center flex flex-col justify-between relative group hover:scale-[1.01] hover:shadow-lg hover:border-slate-600 border border-transparent cursor-pointer overflow-hidden animate-fade-in">
                             
                                                             <div class="w-full flex flex-wrap items-center justify-end gap-1 mb-2 bg-slate-950/80 p-1.5 rounded-xl border border-slate-800/80 no-print" onmousedown="disableDrag(event)" onclick="event.stopPropagation()">
                                 <div class="flex items-center gap-0.5">
