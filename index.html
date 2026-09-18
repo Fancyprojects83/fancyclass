@@ -1798,7 +1798,7 @@
             if (!currentCells[cellKey]) {
                 currentCells[cellKey] = { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
             }
-            showToast("Ανέβασμα εικόνας στο ImgBB...", "⏳");
+            showToast("Ανέβασμα εικόνας...", "⏳");
             const url = await uploadImageToImgBB(file);
             if (url) {
                 currentCells[cellKey].img = url;
