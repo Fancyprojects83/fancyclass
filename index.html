@@ -570,6 +570,7 @@
         let undoStack = [];
         let draggedCellId = null;
         let touchDragState = null;
+        let touchDragLongPressTimer = null;
         let draggedHourIndex = null;
         let touchHourDragState = null;
         let suppressNextCellTap = false;
@@ -2018,13 +2019,24 @@
         window.handleTouchDragStart = function(e, row, col) {
             if (e.target.closest('button, input, [contenteditable="true"]')) return;
             const touch = e.touches[0];
+            const sourceCell = e.currentTarget;
+            clearTimeout(touchDragLongPressTimer);
             touchDragState = {
                 sourceId: `${row}_${col}`,
                 startX: touch.clientX,
                 startY: touch.clientY,
                 active: false,
-                sourceCell: e.currentTarget
+                longPressed: false,
+                sourceCell
             };
+            touchDragLongPressTimer = setTimeout(() => {
+                if (!touchDragState) return;
+                touchDragState.longPressed = true;
+                touchDragState.startX = touch.clientX;
+                touchDragState.startY = touch.clientY;
+                sourceCell.classList.add('dragging');
+                showToast('Σύρετε το κελί σε νέο σημείο', '↔️');
+            }, 550);
         };
 
         window.handleTouchDragMove = function(e) {
@@ -2034,7 +2046,14 @@
                 touch.clientX - touchDragState.startX,
                 touch.clientY - touchDragState.startY
             );
-            if (distance < 10) return;
+            if (!touchDragState.longPressed) {
+                if (distance > 10) {
+                    clearTimeout(touchDragLongPressTimer);
+                    touchDragState = null;
+                }
+                return;
+            }
+            if (distance < 5) return;
             e.preventDefault();
             touchDragState.active = true;
             touchDragState.sourceCell.classList.add('dragging');
@@ -2044,14 +2063,18 @@
         };
 
         window.handleTouchDragEnd = function(e) {
+            clearTimeout(touchDragLongPressTimer);
+            touchDragLongPressTimer = null;
             if (!touchDragState) return;
             const state = touchDragState;
             const touch = e.changedTouches[0];
-            const target = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.cell');
+            const target = state.longPressed
+                ? document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.cell')
+                : null;
             state.sourceCell.classList.remove('dragging');
             document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('drag-over'));
             touchDragState = null;
-            if (!state.active || !target || target === state.sourceCell) return;
+            if (!state.longPressed || !state.active || !target || target === state.sourceCell) return;
             suppressNextCellTap = true;
             const targetRow = Number(target.dataset.row);
             const targetCol = Number(target.dataset.col);
