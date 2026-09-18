@@ -273,6 +273,12 @@
                     <button id="undoBtn" onclick="undo()" class="bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-slate-200 px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm disabled:cursor-not-allowed">
                         ↩️ Αναίρεση
                     </button>
+                    <button onclick="copyCurrentStudentSchedule()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm">
+                        📋 Αντιγραφή
+                    </button>
+                    <button id="pasteStudentScheduleBtn" onclick="pasteStudentSchedule()" class="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm" disabled>
+                        📥 Επικόλληση
+                    </button>
                     <button onclick="clearCurrentBoardRequest()" class="bg-red-600/80 hover:bg-red-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm">
                         🗑️ Εκκαθάριση
                     </button>
@@ -338,11 +344,11 @@
                 <div class="mb-6 bg-slate-900/50 p-4 rounded-2xl border border-slate-700/50">
                     <label class="block text-slate-300 text-sm font-bold mb-3 flex justify-between items-center">
                         <span>Χρώμα Φόντου Κελιών:</span>
-                        <input type="color" id="cellBgColorPicker" oninput="applyCustomCellBackground(this.value)" class="w-10 h-10 cursor-pointer">
+                        <input type="color" id="cellBgColorPicker" oninput="previewCustomCellBackground(this.value)" onchange="applyCustomCellBackground(this.value)" class="w-10 h-10 cursor-pointer">
                     </label>
                     <label class="block text-slate-300 text-sm font-bold flex justify-between items-center">
                         <span>Χρώμα Γραμματοσειράς Κελιών:</span>
-                        <input type="color" id="cellTextColorPicker" oninput="applyCustomCellTextColor(this.value)" class="w-10 h-10 cursor-pointer">
+                        <input type="color" id="cellTextColorPicker" oninput="previewCustomCellTextColor(this.value)" onchange="applyCustomCellTextColor(this.value)" class="w-10 h-10 cursor-pointer">
                     </label>
                 </div>
                 <div class="flex justify-end gap-2 mt-8">
@@ -594,6 +600,7 @@
         let unsubscribeGlobalTitle = null;
         let pendingMove = null;
         let studentNameUndoValue = '';
+        let copiedStudentSchedule = null;
 
         const IMGBB_API_KEY = 'b1a8388f6b7c544529b95f37048a3c7e';
 
@@ -974,11 +981,17 @@
             document.documentElement.style.setProperty('--bg-card', hex);
             autoSaveToFirebase();
         };
+        window.previewCustomCellBackground = function(hex) {
+            document.documentElement.style.setProperty('--cell-bg', hex);
+        };
         window.applyCustomCellBackground = function(hex) {
             config.cellBg = hex;
             document.documentElement.style.setProperty('--cell-bg', hex);
             renderGrid();
             autoSaveToFirebase();
+        };
+        window.previewCustomCellTextColor = function(hex) {
+            document.documentElement.style.setProperty('--cell-text', hex);
         };
         window.applyCustomCellTextColor = function(hex) {
             config.cellTextColor = hex;
@@ -1114,7 +1127,67 @@
             renderStudentPills();
             renderGrid();
             updateHeaderDetails();
+            updateStudentScheduleClipboardButton();
             autoSaveToFirebase();
+        };
+
+        function updateStudentScheduleClipboardButton() {
+            const pasteButton = document.getElementById('pasteStudentScheduleBtn');
+            if (pasteButton) pasteButton.disabled = !copiedStudentSchedule || copiedStudentSchedule.studentId === config.currentStudentId;
+        }
+
+        window.copyCurrentStudentSchedule = function() {
+            const studentId = config.currentStudentId;
+            const student = config.students.find(item => item.id === studentId);
+            if (!student) return;
+
+            const prefix = `${studentId}_`;
+            const cells = {};
+            Object.keys(currentCells).forEach(key => {
+                if (key.startsWith(prefix)) {
+                    cells[key.slice(prefix.length)] = JSON.parse(JSON.stringify(currentCells[key]));
+                }
+            });
+
+            copiedStudentSchedule = {
+                studentId,
+                studentName: student.name,
+                times: JSON.parse(JSON.stringify(getStudentTimes(studentId))),
+                cells
+            };
+            updateStudentScheduleClipboardButton();
+            showToast(`Αντιγράφηκε το πρόγραμμα του/της ${student.name}!`, '📋');
+        };
+
+        window.pasteStudentSchedule = function() {
+            if (!copiedStudentSchedule || copiedStudentSchedule.studentId === config.currentStudentId) return;
+            const targetStudent = config.students.find(item => item.id === config.currentStudentId);
+            if (!targetStudent) return;
+
+            openConfirm(
+                'Επικόλληση προγράμματος;',
+                `Το πρόγραμμα του/της «${copiedStudentSchedule.studentName}» θα αντικαταστήσει το υπάρχον πρόγραμμα του/της «${targetStudent.name}».`,
+                '📥',
+                'Επικόλληση',
+                () => {
+                    saveUndoState();
+                    const targetId = config.currentStudentId;
+                    const prefix = `${targetId}_`;
+                    Object.keys(currentCells).forEach(key => {
+                        if (key.startsWith(prefix)) delete currentCells[key];
+                    });
+
+                    studentTimes[targetId] = JSON.parse(JSON.stringify(copiedStudentSchedule.times));
+                    Object.entries(copiedStudentSchedule.cells).forEach(([relativeKey, cell]) => {
+                        currentCells[`${targetId}_${relativeKey}`] = JSON.parse(JSON.stringify(cell));
+                    });
+                    currentTimes = studentTimes[targetId];
+                    renderGrid();
+                    updateHeaderDetails();
+                    autoSaveToFirebase();
+                    showToast('Το πρόγραμμα επικολλήθηκε επιτυχώς!', '✅');
+                }
+            );
         };
 
         window.deleteStudent = function(studentId) {
