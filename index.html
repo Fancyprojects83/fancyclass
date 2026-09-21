@@ -2420,7 +2420,6 @@
                         imgHtml = `
                             <div class="relative group/img flex flex-col items-center justify-center w-full h-full min-h-[160px]">
                                 <img id="img-${rowIndex}-${col}" src="${escapeHtml(cellData.img)}" style="width: ${cellImgWidth}%;" class="preview-img ${cellImgWidth >= 100 ? 'fill-cell' : ''}" alt="Image">
-                                <button onclick="event.stopPropagation(); removeCellImage(${rowIndex}, ${col})" class="absolute top-0 right-0 bg-red-600 hover:bg-red-500 text-white text-[9px] px-1.5 rounded-full opacity-100 transition-opacity no-print" title="Αφαίρεση εικόνας">✕</button>
                                 <div class="w-full mt-2 no-print cell-slider-container flex items-center gap-1 bg-slate-950/90 p-1.5 rounded-lg border border-slate-800" onmousedown="disableDrag(event)" ontouchstart="disableDrag(event)" onclick="event.stopPropagation()">
                                     <span class="text-[9px] text-slate-400 font-bold">↔️</span>
                                     <input 
