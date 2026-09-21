@@ -40,7 +40,7 @@
              touch-action: none;
         }
         .editable {
-             font-size: 12px;
+             font-size: 15px;
              user-select: text;
              -webkit-user-select: text;
              touch-action: manipulation;
@@ -799,28 +799,32 @@
             if (!userId || userId !== auth.currentUser?.uid) return Promise.resolve();
             saveRequested = true;
             activeSaveUserId = userId;
-            const generation = ++saveGeneration;
+
+            // Οι γρήγορες διαδοχικές αλλαγές εκτελούνται σε έναν worker. Έτσι,
+            // μια αλλαγή που έγινε όσο αποθηκευόταν η προηγούμενη δεν χάνεται.
             saveQueue = saveQueue.catch(() => undefined).then(async () => {
-                if (!saveRequested || generation !== saveGeneration || activeSaveUserId !== userId || userId !== auth.currentUser?.uid) return;
-                saveRequested = false;
-                isLocalSaving = true;
+                while (saveRequested && activeSaveUserId === userId && userId === auth.currentUser?.uid) {
+                    saveRequested = false;
+                    isLocalSaving = true;
 
-                // Create a snapshot so a later image upload cannot overwrite a newer save.
-                const activeTimes = getStudentTimes(config.currentStudentId);
-                const payload = JSON.parse(JSON.stringify({
-                    config,
-                    studentTimes,
-                    currentTimes: activeTimes,
-                    currentCells
-                }));
+                    // Snapshot πριν το await, ώστε οι επόμενες αλλαγές να αποθηκευτούν
+                    // στον επόμενο κύκλο και να μην αντικατασταθούν από παλιότερα δεδομένα.
+                    const activeTimes = getStudentTimes(config.currentStudentId);
+                    const payload = JSON.parse(JSON.stringify({
+                        config,
+                        studentTimes,
+                        currentTimes: activeTimes,
+                        currentCells
+                    }));
 
-                try {
-                    await set(ref(db, 'users/' + userId + '/appState'), payload);
-                } catch (error) {
-                    console.error('Σφάλμα αποθήκευσης στο Firebase:', error);
-                    showToast("Σφάλμα αποθήκευσης!", "❌");
-                } finally {
-                    isLocalSaving = false;
+                    try {
+                        await set(ref(db, 'users/' + userId + '/appState'), payload);
+                    } catch (error) {
+                        console.error('Σφάλμα αποθήκευσης στο Firebase:', error);
+                        showToast("Σφάλμα αποθήκευσης!", "❌");
+                    } finally {
+                        isLocalSaving = false;
+                    }
                 }
             });
             return saveQueue;
