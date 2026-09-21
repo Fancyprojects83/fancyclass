@@ -2330,7 +2330,7 @@
                         contenteditable="true" 
                         onkeydown="if(event.key==='Enter'){ event.preventDefault(); this.blur(); }"
                         onblur="updateHourText(${rowIndex}, this.innerText)" 
-                        class="text-xs font-extrabold focus:outline-none focus:ring-1 focus:ring-accent px-1 py-0.5 rounded cursor-text"
+                        class="text-base sm:text-lg font-extrabold focus:outline-none focus:ring-1 focus:ring-accent px-1 py-0.5 rounded cursor-text"
                         title="Κάντε κλικ για να επεξεργαστείτε την ώρα">
                         ${escapeHtml(time)}
                     </div>
