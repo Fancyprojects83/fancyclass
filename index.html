@@ -2398,7 +2398,7 @@
                     const emptyCellClass = isEmptyCell ? 'empty-cell' : '';
                     
                     const cellImgWidth = Math.max(40, Math.min(100, Number(cellData.imgWidth) || 100));
-                    const stampTextHtml = cellData.isStamp && String(cellData.text || '').trim()
+                    const stampTextHtml = cellData.isStamp && !String(cellData.img || '').trim() && String(cellData.text || '').trim()
                         ? `<div class="text-lg sm:text-xl font-black whitespace-pre-line break-words p-2 w-full">${escapeHtml(cellData.text)}</div>`
                         : '';
                     const textEditorHtml = cellData.isStamp ? '' : `
