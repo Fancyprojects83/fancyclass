@@ -660,6 +660,19 @@
             if (!config.customStamps || !Array.isArray(config.customStamps)) {
                 config.customStamps = [];
             }
+            // Υποστήριξη και παλαιότερων εγγραφών όπου η εικόνα είχε άλλο όνομα πεδίου.
+            config.customStamps.forEach(stamp => {
+                if (stamp.img === undefined || stamp.img === null) {
+                    stamp.img = stamp.image || stamp.imageUrl || '';
+                }
+                if (typeof stamp.img !== 'string') stamp.img = '';
+            });
+        }
+
+        function getStampImage(stamp) {
+            if (!stamp || typeof stamp !== 'object') return '';
+            const image = stamp.img || stamp.image || stamp.imageUrl || '';
+            return typeof image === 'string' ? image.trim() : '';
         }
 
         function getStudentTimes(studentId) {
@@ -752,8 +765,33 @@
                 }
                 return imageUrl;
             } catch (error) {
-                console.error('Σφάλμα μεταφόρτωσης ImgBB:', error);
-                return null;
+                // Αν το ImgBB δεν είναι διαθέσιμο ή το δίκτυο μπλοκάρει το request,
+                // αποθηκεύουμε μια μικρότερη τοπική έκδοση της εικόνας στο Firebase.
+                console.warn('Το ImgBB δεν είναι διαθέσιμο. Χρήση τοπικής εικόνας:', error.message);
+                try {
+                    return await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const image = new Image();
+                            image.onload = () => {
+                                const maxSize = 1200;
+                                const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+                                const canvas = document.createElement('canvas');
+                                canvas.width = Math.max(1, Math.round(image.width * scale));
+                                canvas.height = Math.max(1, Math.round(image.height * scale));
+                                canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+                                resolve(canvas.toDataURL('image/jpeg', 0.82));
+                            };
+                            image.onerror = reject;
+                            image.src = reader.result;
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                } catch (fallbackError) {
+                    console.error('Αποτυχία τοπικής αποθήκευσης εικόνας:', fallbackError);
+                    return null;
+                }
             }
         }
 
@@ -1499,9 +1537,10 @@
             document.getElementById('stampInputColor').value = rgbToHex(stamp.textColor || '#93c5fd');
             resetStampImagePreview();
 
-            if (stamp.img) {
+            const stampImage = getStampImage(stamp);
+            if (stampImage) {
                 const preview = document.getElementById('stampImagePreview');
-                preview.src = stamp.img;
+                preview.src = stampImage;
                 preview.classList.remove('hidden');
                 document.getElementById('stampImagePlaceholder').classList.add('hidden');
             }
@@ -1552,7 +1591,7 @@
 
             const existingStamp = config.customStamps.find(stamp => stamp.id === editingStampId);
             saveUndoState();
-            let imageUrl = existingStamp?.img || '';
+            let imageUrl = existingStamp ? getStampImage(existingStamp) : '';
             if (tempStampImageFile) {
                 showToast("Ανέβασμα εικόνας...", "⏳");
                 const url = await uploadImageToImgBB(tempStampImageFile);
@@ -1628,10 +1667,11 @@
             }
 
             config.customStamps.forEach(s => {
+                const stampImage = getStampImage(s);
                 const activeRing = (activeStamp && activeStamp.id === s.id) ? 'ring-4 ring-white' : '';
-                const contentHtml = s.img ? `
+                const contentHtml = stampImage ? `
                     <div class="flex flex-col items-center gap-1.5 p-1 w-full">
-                        <img src="${escapeHtml(s.img)}" class="w-16 h-16 object-contain rounded-lg bg-black/20 p-1 shadow-inner">
+                        <img src="${escapeHtml(stampImage)}" class="w-16 h-16 object-contain rounded-lg bg-black/20 p-1 shadow-inner" alt="Εικόνα σφραγίδας" onerror="this.closest('.flex.flex-col')?.classList.add('hidden')">
                         <span class="text-xs font-extrabold truncate max-w-[100px]">${escapeHtml(s.text)}</span>
                     </div>
                 ` : `
@@ -1841,8 +1881,8 @@
                     bg: activeStamp.bg,
                     textColor: activeStamp.textColor,
                     isStamp: true,
-                    img: activeStamp.img || '',
-                    imgWidth: activeStamp.img ? 92 : 48,
+                    img: getStampImage(activeStamp),
+                    imgWidth: getStampImage(activeStamp) ? 92 : 48,
                     fontSize: activeStamp.fontSize || 14
                 };
                 renderGrid();
