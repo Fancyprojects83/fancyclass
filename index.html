@@ -765,8 +765,33 @@
                 }
                 return imageUrl;
             } catch (error) {
-                console.error('Το ImgBB δεν είναι διαθέσιμο:', error);
-                return null;
+                // Αν το ImgBB δεν είναι διαθέσιμο ή το δίκτυο μπλοκάρει το request,
+                // αποθηκεύουμε μια μικρότερη τοπική έκδοση της εικόνας στο Firebase.
+                console.warn('Το ImgBB δεν είναι διαθέσιμο. Χρήση τοπικής εικόνας:', error.message);
+                try {
+                    return await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const image = new Image();
+                            image.onload = () => {
+                                const maxSize = 1200;
+                                const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+                                const canvas = document.createElement('canvas');
+                                canvas.width = Math.max(1, Math.round(image.width * scale));
+                                canvas.height = Math.max(1, Math.round(image.height * scale));
+                                canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+                                resolve(canvas.toDataURL('image/jpeg', 0.82));
+                            };
+                            image.onerror = reject;
+                            image.src = reader.result;
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                } catch (fallbackError) {
+                    console.error('Αποτυχία τοπικής αποθήκευσης εικόνας:', fallbackError);
+                    return null;
+                }
             }
         }
 
@@ -2373,6 +2398,22 @@
                     const emptyCellClass = isEmptyCell ? 'empty-cell' : '';
                     
                     const cellImgWidth = Math.max(40, Math.min(100, Number(cellData.imgWidth) || 100));
+                    const stampTextHtml = cellData.isStamp && String(cellData.text || '').trim()
+                        ? `<div class="text-lg sm:text-xl font-black whitespace-pre-line break-words p-2 w-full">${escapeHtml(cellData.text)}</div>`
+                        : '';
+                    const textEditorHtml = cellData.isStamp ? '' : `
+                            <div class="w-full mb-2" onmousedown="disableDrag(event)" ontouchstart="disableDrag(event)" onclick="handleCellSurfaceClick(event, ${rowIndex}, ${col})">
+                                <span class="text-[8px] uppercase font-bold text-slate-400 block mb-0.5 text-left pl-1">Μάθημα:</span>
+                                <div 
+                                    id="text-${rowIndex}-${col}"
+                                    contenteditable="true"
+                                    onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); this.blur(); }"
+                                    onblur="handleCellInput(event, ${rowIndex}, ${col})"
+                                    class="editable font-extrabold whitespace-pre-line focus:outline-none p-1 bg-slate-950/45 border border-slate-800 rounded-lg cursor-text min-h-[30px] max-h-[48px] overflow-y-auto text-center">
+                                    ${escapeHtml(cellData.text || '')}
+                                </div>
+                            </div>
+                        `;
                     
                     let imgHtml = '';
                     if (cellData.img && cellData.img.trim() !== '') {
@@ -2428,24 +2469,10 @@
                                 <button onclick="event.stopPropagation(); clearSingleCell(${rowIndex}, ${col})" class="p-1 bg-red-600/90 hover:bg-red-600 text-white rounded text-[10px] leading-none" title="Καθαρισμός">🗑️</button>
                             </div>
 
-                            ${cellData.isStamp ? '' : `
-                            <div class="w-full mb-2" onmousedown="disableDrag(event)" ontouchstart="disableDrag(event)" onclick="handleCellSurfaceClick(event, ${rowIndex}, ${col})">
-                                <span class="text-[8px] uppercase font-bold text-slate-400 block mb-0.5 text-left pl-1">Μάθημα:</span>
-                                <div 
-                                    id="text-${rowIndex}-${col}"
-                                    contenteditable="true"
-                                    onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); this.blur(); }"
-                                    onblur="handleCellInput(event, ${rowIndex}, ${col})"
-                                    class="editable font-extrabold whitespace-pre-line focus:outline-none p-1 bg-slate-950/45 border border-slate-800 rounded-lg cursor-text min-h-[30px] max-h-[48px] overflow-y-auto text-center">
-                                    ${escapeHtml(cellData.text || '')}
-                                </div>
-                            </div>
-                            `}
+                            ${textEditorHtml}
 
                             <div class="flex-1 flex flex-col justify-center items-center w-full bg-slate-900/30 p-1 rounded-lg border border-slate-800/40 my-0.5 min-h-[160px]">
-                                ${cellData.isStamp && cellData.text && !cellData.img ? `
-                                    <div class="font-extrabold text-base sm:text-lg whitespace-pre-line text-center px-2 py-1">${escapeHtml(cellData.text)}</div>
-                                ` : ''}
+                                ${stampTextHtml}
                                 ${imgHtml}
                             </div>
                         </div>
