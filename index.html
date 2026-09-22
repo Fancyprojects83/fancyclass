@@ -939,6 +939,22 @@
                         ) {
                             localStorage.removeItem(draftKey);
                         }
+
+                        const orderDraftKey = `fancyclass-order-draft-${userId}`;
+                        const orderDraft = JSON.parse(localStorage.getItem(orderDraftKey) || 'null');
+                        if (orderDraft && orderDraft.studentId) {
+                            const savedTimes = payload.studentTimes?.[orderDraft.studentId];
+                            const savedCells = Object.fromEntries(
+                                Object.entries(payload.currentCells || {})
+                                    .filter(([key]) => key.startsWith(`${orderDraft.studentId}_`))
+                            );
+                            if (
+                                JSON.stringify(savedTimes) === JSON.stringify(orderDraft.times) &&
+                                JSON.stringify(savedCells) === JSON.stringify(orderDraft.cells)
+                            ) {
+                                localStorage.removeItem(orderDraftKey);
+                            }
+                        }
                     } catch (error) {
                         console.error('Σφάλμα αποθήκευσης στο Firebase:', error);
                         showToast("Σφάλμα αποθήκευσης!", "❌");
@@ -989,6 +1005,27 @@
             }
         }
 
+        function applyPendingOrderDraft(userId) {
+            if (!userId) return;
+            const draftKey = `fancyclass-order-draft-${userId}`;
+            try {
+                const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
+                if (!draft || draft.studentId !== config.currentStudentId || !Array.isArray(draft.times)) return;
+
+                studentTimes[draft.studentId] = [...draft.times];
+                currentTimes = studentTimes[draft.studentId];
+                Object.keys(currentCells).forEach(key => {
+                    if (key.startsWith(`${draft.studentId}_`)) delete currentCells[key];
+                });
+                Object.entries(draft.cells || {}).forEach(([key, value]) => {
+                    currentCells[key] = value;
+                });
+                autoSaveToFirebase();
+            } catch (error) {
+                console.warn('Αδυναμία ανάκτησης αλλαγής σειράς ωρών:', error);
+            }
+        }
+
         function loadFullStateFromFirebase(userId) {
             const stateRef = ref(db, 'users/' + userId + '/appState');
             return get(stateRef).then((snapshot) => {
@@ -1010,6 +1047,7 @@
 
                     currentCells = data.currentCells && typeof data.currentCells === 'object' ? data.currentCells : {};
                     applyPendingNoteDraft(userId);
+                    applyPendingOrderDraft(userId);
                     normalizeConfig();
                     document.documentElement.style.setProperty('--accent', config.accentHex || '#6366f1');
                     document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
@@ -2327,6 +2365,22 @@
             // Κρατάμε συγχρονισμένες τις δύο μεταβλητές πριν την αποθήκευση.
             studentTimes[studentId] = [...times];
             currentTimes = studentTimes[studentId];
+
+            // Προσωρινό αντίγραφο για περίπτωση ανανέωσης πριν ολοκληρωθεί το Firebase save.
+            const userId = auth.currentUser?.uid;
+            if (userId) {
+                const orderCells = Object.fromEntries(
+                    Object.entries(currentCells)
+                        .filter(([key]) => key.startsWith(`${studentId}_`))
+                );
+                localStorage.setItem(`fancyclass-order-draft-${userId}`, JSON.stringify({
+                    studentId,
+                    times: studentTimes[studentId],
+                    cells: orderCells,
+                    updatedAt: Date.now()
+                }));
+            }
+
             renderGrid();
             autoSaveToFirebase();
             showToast("Οι ώρες μετακινήθηκαν μαζί με τα μαθήματά τους!", "⏱️");
