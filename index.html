@@ -1920,6 +1920,35 @@
             autoSaveToFirebase();
         };
 
+        window.toggleStampNote = function(row, col) {
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            const cell = currentCells[cellKey];
+            if (!cell || !cell.isStamp) return;
+            saveUndoState();
+            cell.showNote = !cell.showNote;
+            renderGrid();
+            autoSaveToFirebase();
+        };
+
+        window.handleStampNoteInput = function(e, row, col) {
+            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            if (!currentCells[cellKey]) return;
+            const note = e.target.innerText.replace(/[\r\n]+/g, ' ').trim();
+            if (currentCells[cellKey].note !== note) {
+                saveUndoState();
+                currentCells[cellKey].note = note;
+                currentCells[cellKey].showNote = true;
+                autoSaveToFirebase();
+            }
+        };
+
+        window.handleStampNoteKeydown = function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                event.currentTarget.blur();
+            }
+        };
+
         window.clearSingleCell = function(row, col) {
             saveUndoState();
             const cellKey = `${config.currentStudentId}_${row}_${col}`;
@@ -2085,7 +2114,9 @@
                 else delete currentCells[targetKey];
             }
 
-            currentTimes = times;
+            // Κρατάμε συγχρονισμένες τις δύο μεταβλητές πριν την αποθήκευση.
+            studentTimes[studentId] = [...times];
+            currentTimes = studentTimes[studentId];
             renderGrid();
             autoSaveToFirebase();
             showToast("Οι ώρες μετακινήθηκαν μαζί με τα μαθήματά τους!", "⏱️");
@@ -2401,6 +2432,19 @@
                     const stampTextHtml = cellData.isStamp && !String(cellData.img || '').trim() && String(cellData.text || '').trim()
                         ? `<div class="text-lg sm:text-xl font-black whitespace-pre-line break-words p-2 w-full">${escapeHtml(cellData.text)}</div>`
                         : '';
+                    const stampNoteHtml = cellData.isStamp ? `
+                        <div class="w-full mt-1 no-print flex items-center justify-center gap-1" onmousedown="disableDrag(event)" ontouchstart="disableDrag(event)" onclick="event.stopPropagation()">
+                            <button onclick="event.stopPropagation(); toggleStampNote(${rowIndex}, ${col})" class="text-[10px] bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg border border-slate-700/60" title="Προσθήκη μικρού πεδίου σημείωσης">📝</button>
+                            ${cellData.showNote ? `
+                                <div
+                                    contenteditable="true"
+                                    onkeydown="handleStampNoteKeydown(event)"
+                                    onblur="handleStampNoteInput(event, ${rowIndex}, ${col})"
+                                    class="editable flex-1 min-h-[24px] max-h-[42px] overflow-y-auto p-1 text-xs font-bold text-center bg-slate-950/45 border border-slate-800 rounded-lg"
+                                    title="Προσθέστε σημείωση στη σφραγίδα">${escapeHtml(cellData.note || '')}</div>
+                            ` : ''}
+                        </div>
+                    ` : '';
                     const textEditorHtml = cellData.isStamp ? '' : `
                             <div class="w-full mb-2" onmousedown="disableDrag(event)" ontouchstart="disableDrag(event)" onclick="handleCellSurfaceClick(event, ${rowIndex}, ${col})">
                                 <span class="text-[8px] uppercase font-bold text-slate-400 block mb-0.5 text-left pl-1">Μάθημα:</span>
@@ -2473,6 +2517,7 @@
                             <div class="flex-1 flex flex-col justify-center items-center w-full bg-slate-900/30 p-1 rounded-lg border border-slate-800/40 my-0.5 min-h-[160px]">
                                 ${stampTextHtml}
                                 ${imgHtml}
+                                ${stampNoteHtml}
                             </div>
                         </div>
                     `;
