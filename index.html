@@ -201,6 +201,102 @@
             body.print-portrait #scheduleGrid {
                 grid-template-columns: repeat(3, 1fr) !important;
             }
+
+            /* Συμπαγής εκτύπωση ώστε να χωρούν περισσότερες ώρες ανά σελίδα. */
+            #scheduleGrid {
+                gap: 3px !important;
+                width: 100% !important;
+            }
+            #scheduleGrid > div {
+                min-width: 0 !important;
+                padding: 4px !important;
+                border-radius: 4px !important;
+                font-size: 9px !important;
+                line-height: 1.15 !important;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            #scheduleGrid > .cell,
+            #scheduleGrid > .hour-cell {
+                min-height: 58px !important;
+            }
+            #scheduleGrid > .cell > .flex-1 {
+                min-height: 52px !important;
+                padding: 2px !important;
+                margin: 1px 0 !important;
+            }
+            #scheduleGrid .editable {
+                font-size: 10px !important;
+                min-height: 20px !important;
+                max-height: none !important;
+                padding: 2px !important;
+            }
+            #scheduleGrid .preview-img {
+                width: 100% !important;
+                height: 110px !important;
+                min-height: 0 !important;
+                max-height: 110px !important;
+                object-fit: contain !important;
+                object-position: center !important;
+            }
+            /* Τα κελιά με εικόνα περιορίζονται στο ύψος της εικόνας, χωρίς περιττό κενό. */
+            #scheduleGrid > .cell:has(.preview-img) {
+                min-height: 118px !important;
+                height: 118px !important;
+                overflow: hidden !important;
+            }
+            /* Σε κελί-εικόνα κρύβουμε μόνο το πεδίο μαθήματος, αλλά κρατάμε τις σημειώσεις. */
+            #scheduleGrid > .cell:has(.preview-img) > .w-full.mb-2,
+            #scheduleGrid > .cell:has(.preview-img) > .flex-1 > .text-lg {
+                display: none !important;
+            }
+            /* Η εικόνα καταλαμβάνει 110px και η σημείωση εμφανίζεται από κάτω. */
+            #scheduleGrid > .cell:has(.preview-img) {
+                min-height: 145px !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            #scheduleGrid > .cell:has(.preview-img) > .flex-1 {
+                min-height: 110px !important;
+                height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+            #scheduleGrid > .cell:has(.preview-img) .group\/img {
+                min-height: 110px !important;
+                height: 110px !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            #scheduleGrid > .cell:has(.preview-img) .stampNoteHtml,
+            #scheduleGrid > .cell:has(.preview-img) [id^="note-"] {
+                display: block !important;
+                width: 100% !important;
+                min-height: 20px !important;
+                max-height: none !important;
+                overflow: visible !important;
+                margin-top: 3px !important;
+            }
+            /* Οι εικόνες εκτυπώνονται ολόκληρες, ακόμη και όταν γεμίζουν το κελί στην οθόνη. */
+            #scheduleGrid .preview-img.fill-cell {
+                object-fit: contain !important;
+            }
+            #scheduleGrid .stampNoteHtml,
+            #scheduleGrid [id^="note-"] {
+                width: auto !important;
+                min-height: 18px !important;
+                max-height: none !important;
+                font-size: 9px !important;
+                padding: 2px !important;
+            }
+            #scheduleGrid .cell-actions {
+                display: none !important;
+            }
+            #scheduleGrid .text-\[8px\] {
+                font-size: 7px !important;
+                margin-bottom: 0 !important;
+            }
         }
 
         #login-form {
