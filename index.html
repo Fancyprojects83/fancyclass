@@ -675,6 +675,13 @@
                 }
                 if (typeof stamp.img !== 'string') stamp.img = '';
             });
+
+            // Αν άλλαξε η κατάσταση από άλλη συσκευή, δεν κρατάμε ενεργή
+            // σφραγίδα που έχει διαγραφεί ή αντικατασταθεί.
+            if (activeStamp) {
+                const currentStamp = config.customStamps.find(stamp => stamp.id === activeStamp.id);
+                activeStamp = currentStamp || null;
+            }
         }
 
         function getStampImage(stamp) {
@@ -864,7 +871,9 @@
                     normalizeConfig();
                     
                     studentTimes = data.studentTimes || {};
-                    currentTimes = data.currentTimes || [...defaultTimes];
+                    currentTimes = Array.isArray(data.currentTimes) && data.currentTimes.length
+                        ? data.currentTimes
+                        : [...defaultTimes];
                     if (Object.keys(studentTimes).length === 0) {
                         const activeId = config.currentStudentId || (config.students[0] && config.students[0].id) || 's1';
                         studentTimes[activeId] = [...currentTimes];
@@ -914,7 +923,9 @@
                     normalizeConfig();
 
                     studentTimes = data.studentTimes && typeof data.studentTimes === 'object' ? data.studentTimes : {};
-                    currentTimes = data.currentTimes || [...defaultTimes];
+                    currentTimes = Array.isArray(data.currentTimes) && data.currentTimes.length
+                        ? data.currentTimes
+                        : [...defaultTimes];
                     if (Object.keys(studentTimes).length === 0) {
                         const activeId = config.currentStudentId || 's1';
                         studentTimes[activeId] = [...currentTimes];
@@ -962,6 +973,10 @@
                 timeout = setTimeout(() => func.apply(this, args), wait);
             };
         }
+
+        // Αποφεύγουμε εγγραφή στο Firebase σε κάθε χαρακτήρα, χωρίς να χάνεται
+        // η αλλαγή του ονόματος όταν ο χρήστης γράφει από πληκτρολόγιο ή αφή.
+        const debouncedAutoSave = debounce(autoSaveToFirebase, 400);
 
         loginBtn.addEventListener('click', () => {
             const email = emailInput.value.trim();
@@ -1388,7 +1403,10 @@
         window.autoSave = function() {
             const newName = document.getElementById('studentName').value.trim();
             const student = config.students.find(s => s.id === config.currentStudentId);
-            if (student && newName) student.name = newName;
+            if (student && newName) {
+                student.name = newName;
+                debouncedAutoSave();
+            }
         };
 
         window.updateHourText = function(rowIndex, text) {
@@ -1919,12 +1937,16 @@
         };
 
         window.handleCellInput = function(e, row, col) {
-            saveUndoState();
             const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            const text = e.target.innerText.replace(/[\r\n]+/g, ' ').trim();
+            const oldText = currentCells[cellKey]?.text || '';
+            if (oldText === text) return;
+
+            saveUndoState();
             if (!currentCells[cellKey]) {
                 currentCells[cellKey] = { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
             }
-            currentCells[cellKey].text = e.target.innerText;
+            currentCells[cellKey].text = text;
             autoSaveToFirebase();
         };
 
@@ -2437,15 +2459,16 @@
                 for (let col = 1; col <= 5; col++) {
                     const cellKey = `${config.currentStudentId}_${rowIndex}_${col}`;
                     const cellData = currentCells[cellKey] || { text: '', bg: '', textColor: '', img: '', imgWidth: 48, fontSize: 14 };
+                    const cellImage = typeof cellData.img === 'string' ? cellData.img.trim() : '';
                     
-                            const cellBg = rgbToHex(cellData.bg || config.cellBg || '#1e293b');
+                    const cellBg = rgbToHex(cellData.bg || config.cellBg || '#1e293b');
                     const cellColor = rgbToHex(cellData.textColor || config.cellTextColor || '#f8fafc');
-                    const isEmptyCell = !String(cellData.text || '').trim() && !String(cellData.img || '').trim();
+                    const isEmptyCell = !String(cellData.text || '').trim() && !cellImage;
                     const customBgStyle = `style="background-color: ${cellBg}; color: ${cellColor};"`;
                     const emptyCellClass = isEmptyCell ? 'empty-cell' : '';
                     
                     const cellImgWidth = Math.max(40, Math.min(100, Number(cellData.imgWidth) || 100));
-                    const stampTextHtml = cellData.isStamp && !String(cellData.img || '').trim() && String(cellData.text || '').trim()
+                    const stampTextHtml = cellData.isStamp && !cellImage && String(cellData.text || '').trim()
                         ? `<div class="text-lg sm:text-xl font-black whitespace-pre-line break-words p-2 w-full">${escapeHtml(cellData.text)}</div>`
                         : '';
                     const stampNoteHtml = cellData.isStamp && cellData.showNote ? `
@@ -2475,10 +2498,10 @@
                         `;
                     
                     let imgHtml = '';
-                    if (cellData.img && cellData.img.trim() !== '') {
+                    if (cellImage) {
                         imgHtml = `
                             <div class="relative group/img flex flex-col items-center justify-center w-full h-full min-h-[160px]">
-                                <img id="img-${rowIndex}-${col}" src="${escapeHtml(cellData.img)}" style="width: ${cellImgWidth}%;" class="preview-img ${cellImgWidth >= 100 ? 'fill-cell' : ''}" alt="Image">
+                                <img id="img-${rowIndex}-${col}" src="${escapeHtml(cellImage)}" style="width: ${cellImgWidth}%;" class="preview-img ${cellImgWidth >= 100 ? 'fill-cell' : ''}" alt="Image">
                                 <div class="w-full mt-2 no-print cell-slider-container flex items-center gap-1 bg-slate-950/90 p-1.5 rounded-lg border border-slate-800" onmousedown="disableDrag(event)" ontouchstart="disableDrag(event)" onclick="event.stopPropagation()">
                                     <span class="text-[9px] text-slate-400 font-bold">↔️</span>
                                     <input 
