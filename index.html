@@ -36,6 +36,14 @@
         .cell button, .cell input, .cell [contenteditable="true"] {
              touch-action: manipulation;
         }
+        /* Αρκετά μεγάλο touch target για αξιόπιστη χρήση σε διαδραστικό πίνακα. */
+        .cell-actions button {
+             min-width: 28px;
+             min-height: 28px;
+             display: inline-flex;
+             align-items: center;
+             justify-content: center;
+        }
         .hour-cell {
              touch-action: none;
         }
@@ -1928,6 +1936,14 @@
             cell.showNote = !cell.showNote;
             renderGrid();
             autoSaveToFirebase();
+
+            // Εστίαση στο πεδίο αμέσως μετά τη δημιουργία του, ειδικά σε touch συσκευές.
+            if (cell.showNote) {
+                setTimeout(() => {
+                    const note = document.getElementById(`note-${row}-${col}`);
+                    if (note) note.focus();
+                }, 0);
+            }
         };
 
         window.handleStampNoteInput = function(e, row, col) {
@@ -2432,18 +2448,17 @@
                     const stampTextHtml = cellData.isStamp && !String(cellData.img || '').trim() && String(cellData.text || '').trim()
                         ? `<div class="text-lg sm:text-xl font-black whitespace-pre-line break-words p-2 w-full">${escapeHtml(cellData.text)}</div>`
                         : '';
-                    const stampNoteHtml = cellData.isStamp ? `
-                        <div class="w-full mt-1 no-print flex items-center justify-center gap-1" onmousedown="disableDrag(event)" ontouchstart="disableDrag(event)" onclick="event.stopPropagation()">
-                            <button onclick="event.stopPropagation(); toggleStampNote(${rowIndex}, ${col})" class="text-[10px] bg-slate-800/80 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg border border-slate-700/60" title="Προσθήκη μικρού πεδίου σημείωσης">📝</button>
-                            ${cellData.showNote ? `
-                                <div
-                                    contenteditable="true"
-                                    onkeydown="handleStampNoteKeydown(event)"
-                                    onblur="handleStampNoteInput(event, ${rowIndex}, ${col})"
-                                    class="editable flex-1 min-h-[24px] max-h-[42px] overflow-y-auto p-1 text-xs font-bold text-center bg-slate-950/45 border border-slate-800 rounded-lg"
-                                    title="Προσθέστε σημείωση στη σφραγίδα">${escapeHtml(cellData.note || '')}</div>
-                            ` : ''}
-                        </div>
+                    const stampNoteHtml = cellData.isStamp && cellData.showNote ? `
+                        <div
+                            contenteditable="true"
+                            id="note-${rowIndex}-${col}"
+                            onmousedown="disableDrag(event)"
+                            ontouchstart="disableDrag(event)"
+                            onclick="event.stopPropagation()"
+                            onkeydown="handleStampNoteKeydown(event)"
+                            onblur="handleStampNoteInput(event, ${rowIndex}, ${col})"
+                            class="editable w-36 min-h-[32px] max-h-[56px] overflow-y-auto p-2 text-sm font-bold text-center bg-slate-950/90 border border-slate-800 rounded-lg shadow-lg"
+                            title="Προσθέστε σημείωση στη σφραγίδα">${escapeHtml(cellData.note || '')}</div>
                     ` : '';
                     const textEditorHtml = cellData.isStamp ? '' : `
                             <div class="w-full mb-2" onmousedown="disableDrag(event)" ontouchstart="disableDrag(event)" onclick="handleCellSurfaceClick(event, ${rowIndex}, ${col})">
@@ -2509,6 +2524,7 @@
                             
                             <div class="cell-actions absolute top-1 right-1 z-10 flex items-center gap-0.5 bg-slate-950/80 p-0.5 rounded-lg border border-slate-800/80 no-print opacity-70 hover:opacity-100 transition-opacity" onmousedown="disableDrag(event)" ontouchstart="disableDrag(event)" onclick="event.stopPropagation()">
                                 <button onclick="event.stopPropagation(); speakCell(${rowIndex}, ${col})" class="p-1 bg-indigo-900/90 hover:bg-indigo-800 text-white rounded text-[10px] leading-none" title="Εκφώνηση">🔊</button>
+                                ${cellData.isStamp ? `<button onclick="event.stopPropagation(); toggleStampNote(${rowIndex}, ${col})" class="p-1 bg-slate-800/90 hover:bg-slate-700 text-slate-300 rounded text-[10px] leading-none" title="Προσθήκη πεδίου σημείωσης">📝</button>` : ''}
                                 <button onclick="event.stopPropagation(); clearSingleCell(${rowIndex}, ${col})" class="p-1 bg-red-600/90 hover:bg-red-600 text-white rounded text-[10px] leading-none" title="Καθαρισμός">🗑️</button>
                             </div>
 
