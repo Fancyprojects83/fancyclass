@@ -2066,22 +2066,32 @@
 
         window.handleStampNoteInput = function(e, row, col, saveImmediately = false) {
             const cellKey = `${config.currentStudentId}_${row}_${col}`;
-            const cell = currentCells[cellKey];
-            if (!cell) return;
+            let cell = currentCells[cellKey];
 
-            // Το textContent διαβάζει αξιόπιστα την πραγματική τιμή του contenteditable.
-            const note = (e.currentTarget?.textContent || '').replace(/[\r\n]+/g, ' ').trim();
+            // Το πεδίο μπορεί να παραμείνει κενό. Δημιουργούμε το κελί και τότε,
+            // ώστε να αποθηκεύεται και η διαγραφή της σημείωσης.
+            if (!cell) {
+                cell = currentCells[cellKey] = {
+                    text: '',
+                    bg: '',
+                    textColor: '',
+                    img: '',
+                    imgWidth: 48,
+                    fontSize: 14,
+                    isStamp: true
+                };
+            }
+
+            const note = String(e.currentTarget?.textContent ?? '')
+                .replace(/[\r\n]+/g, ' ')
+                .trim();
             const changed = cell.note !== note || cell.showNote !== true;
             cell.note = note;
             cell.showNote = true;
 
-            if (changed) {
-                // Αποθήκευση καθώς πληκτρολογείται και οπωσδήποτε όταν το πεδίο κλείνει.
-                if (saveImmediately) {
-                    autoSaveToFirebase();
-                } else {
-                    debouncedAutoSave();
-                }
+            if (changed || saveImmediately) {
+                // Κάθε αλλαγή, ακόμη και κενή σημείωση, αποθηκεύεται αμέσως.
+                autoSaveToFirebase();
             }
         };
 
