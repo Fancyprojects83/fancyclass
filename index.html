@@ -2064,15 +2064,24 @@
             }
         };
 
-        window.handleStampNoteInput = function(e, row, col) {
+        window.handleStampNoteInput = function(e, row, col, saveImmediately = false) {
             const cellKey = `${config.currentStudentId}_${row}_${col}`;
-            if (!currentCells[cellKey]) return;
-            const note = e.target.innerText.replace(/[\r\n]+/g, ' ').trim();
-            if (currentCells[cellKey].note !== note) {
-                saveUndoState();
-                currentCells[cellKey].note = note;
-                currentCells[cellKey].showNote = true;
-                autoSaveToFirebase();
+            const cell = currentCells[cellKey];
+            if (!cell) return;
+
+            // Το textContent διαβάζει αξιόπιστα την πραγματική τιμή του contenteditable.
+            const note = (e.currentTarget?.textContent || '').replace(/[\r\n]+/g, ' ').trim();
+            const changed = cell.note !== note || cell.showNote !== true;
+            cell.note = note;
+            cell.showNote = true;
+
+            if (changed) {
+                // Αποθήκευση καθώς πληκτρολογείται και οπωσδήποτε όταν το πεδίο κλείνει.
+                if (saveImmediately) {
+                    autoSaveToFirebase();
+                } else {
+                    debouncedAutoSave();
+                }
             }
         };
 
@@ -2575,7 +2584,8 @@
                             ontouchstart="disableDrag(event)"
                             onclick="event.stopPropagation()"
                             onkeydown="handleStampNoteKeydown(event)"
-                            onblur="handleStampNoteInput(event, ${rowIndex}, ${col})"
+                            oninput="handleStampNoteInput(event, ${rowIndex}, ${col})"
+                            onblur="handleStampNoteInput(event, ${rowIndex}, ${col}, true)"
                             class="editable w-36 min-h-[32px] max-h-[56px] overflow-y-auto p-2 text-sm font-bold text-center bg-slate-950/90 border border-slate-800 rounded-lg shadow-lg"
                             title="Προσθέστε σημείωση στη σφραγίδα">${escapeHtml(cellData.note || '')}</div>
                     ` : '';
