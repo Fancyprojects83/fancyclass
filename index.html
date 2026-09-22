@@ -930,6 +930,11 @@
 
                     try {
                         await set(ref(db, 'users/' + userId + '/appState'), payload);
+                        const draftKey = `fancyclass-note-draft-${userId}`;
+                        const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
+                        if (draft && payload.currentCells?.[draft.cellKey]?.note === draft.note) {
+                            localStorage.removeItem(draftKey);
+                        }
                     } catch (error) {
                         console.error('Σφάλμα αποθήκευσης στο Firebase:', error);
                         showToast("Σφάλμα αποθήκευσης!", "❌");
@@ -958,6 +963,27 @@
             });
         }
 
+        function applyPendingNoteDraft(userId) {
+            if (!userId) return;
+            const draftKey = `fancyclass-note-draft-${userId}`;
+            try {
+                const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
+                if (!draft || !draft.cellKey) return;
+                if (!currentCells[draft.cellKey]) {
+                    currentCells[draft.cellKey] = {
+                        text: '', bg: '', textColor: '', img: '',
+                        imgWidth: 48, fontSize: 14, isStamp: true
+                    };
+                }
+                currentCells[draft.cellKey].note = String(draft.note ?? '');
+                currentCells[draft.cellKey].showNote = true;
+                autoSaveToFirebase();
+                localStorage.removeItem(draftKey);
+            } catch (error) {
+                console.warn('Αδυναμία ανάκτησης πρόχειρης σημείωσης:', error);
+            }
+        }
+
         function loadFullStateFromFirebase(userId) {
             const stateRef = ref(db, 'users/' + userId + '/appState');
             return get(stateRef).then((snapshot) => {
@@ -978,6 +1004,7 @@
                     }
 
                     currentCells = data.currentCells && typeof data.currentCells === 'object' ? data.currentCells : {};
+                    applyPendingNoteDraft(userId);
                     normalizeConfig();
                     document.documentElement.style.setProperty('--accent', config.accentHex || '#6366f1');
                     document.documentElement.style.setProperty('--accent-hover', config.accentHoverHex || '#4f46e5');
@@ -2065,11 +2092,11 @@
         };
 
         window.handleStampNoteInput = function(e, row, col, saveImmediately = false) {
-            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            const studentId = config.currentStudentId;
+            const cellKey = `${studentId}_${row}_${col}`;
             let cell = currentCells[cellKey];
 
-            // Το πεδίο μπορεί να παραμείνει κενό. Δημιουργούμε το κελί και τότε,
-            // ώστε να αποθηκεύεται και η διαγραφή της σημείωσης.
+            // Το κελί πρέπει να υπάρχει ακόμη και όταν η σημείωση αδειάσει.
             if (!cell) {
                 cell = currentCells[cellKey] = {
                     text: '',
@@ -2085,14 +2112,23 @@
             const note = String(e.currentTarget?.textContent ?? '')
                 .replace(/[\r\n]+/g, ' ')
                 .trim();
-            const changed = cell.note !== note || cell.showNote !== true;
             cell.note = note;
             cell.showNote = true;
 
-            if (changed || saveImmediately) {
-                // Κάθε αλλαγή, ακόμη και κενή σημείωση, αποθηκεύεται αμέσως.
-                autoSaveToFirebase();
+            // Κρατάμε την τελευταία αλλαγή τοπικά, ώστε να μη χαθεί αν γίνει
+            // ανανέωση πριν ολοκληρωθεί το ασύγχρονο request προς το Firebase.
+            const userId = auth.currentUser?.uid;
+            if (userId) {
+                localStorage.setItem(`fancyclass-note-draft-${userId}`, JSON.stringify({
+                    studentId,
+                    cellKey,
+                    note,
+                    updatedAt: Date.now()
+                }));
             }
+
+            // Η σημείωση αποθηκεύεται σε κάθε input, ακόμη και όταν διαγράφηκε.
+            autoSaveToFirebase();
         };
 
         window.handleStampNoteKeydown = function(event) {
