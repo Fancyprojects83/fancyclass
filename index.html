@@ -932,7 +932,11 @@
                         await set(ref(db, 'users/' + userId + '/appState'), payload);
                         const draftKey = `fancyclass-note-draft-${userId}`;
                         const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
-                        if (draft && payload.currentCells?.[draft.cellKey]?.note === draft.note) {
+                        if (
+                            draft &&
+                            payload.currentCells?.[draft.cellKey]?.note === draft.note &&
+                            payload.currentCells?.[draft.cellKey]?.showNote === draft.showNote
+                        ) {
                             localStorage.removeItem(draftKey);
                         }
                     } catch (error) {
@@ -976,9 +980,10 @@
                     };
                 }
                 currentCells[draft.cellKey].note = String(draft.note ?? '');
-                currentCells[draft.cellKey].showNote = true;
+                currentCells[draft.cellKey].showNote = draft.showNote !== false;
                 autoSaveToFirebase();
-                localStorage.removeItem(draftKey);
+                // Το draft διαγράφεται μόνο από το επιτυχημένο save worker,
+                // ώστε να μη χαθεί σε ανανέωση πριν ολοκληρωθεί το Firebase request.
             } catch (error) {
                 console.warn('Αδυναμία ανάκτησης πρόχειρης σημείωσης:', error);
             }
@@ -2074,11 +2079,26 @@
         };
 
         window.toggleStampNote = function(row, col) {
-            const cellKey = `${config.currentStudentId}_${row}_${col}`;
+            const studentId = config.currentStudentId;
+            const cellKey = `${studentId}_${row}_${col}`;
             const cell = currentCells[cellKey];
             if (!cell || !cell.isStamp) return;
             saveUndoState();
-            cell.showNote = !cell.showNote;
+            cell.showNote = cell.showNote !== true;
+
+            // Κρατάμε και την επιλογή εμφάνισης τοπικά μέχρι να επιβεβαιωθεί
+            // η αποθήκευση στο Firebase, ακόμη και όταν η σημείωση είναι κενή.
+            const userId = auth.currentUser?.uid;
+            if (userId) {
+                localStorage.setItem(`fancyclass-note-draft-${userId}`, JSON.stringify({
+                    studentId,
+                    cellKey,
+                    note: String(cell.note ?? ''),
+                    showNote: cell.showNote,
+                    updatedAt: Date.now()
+                }));
+            }
+
             renderGrid();
             autoSaveToFirebase();
 
@@ -2123,6 +2143,7 @@
                     studentId,
                     cellKey,
                     note,
+                    showNote: cell.showNote !== false,
                     updatedAt: Date.now()
                 }));
             }
