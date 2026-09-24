@@ -139,6 +139,10 @@
             animation: fadeIn 0.25s ease-out forwards;
         }
 
+        .print-student-name {
+            display: none;
+        }
+
         .custom-scrollbar::-webkit-scrollbar {
             height: 8px;
         }
@@ -154,6 +158,14 @@
         @media print {
             body { background: white !important; color: black !important; padding: 0 !important; }
             header, .no-print, button, input, select, .group-hover\:opacity-100, .stamp-container, .cell-slider-container { display: none !important; }
+            .print-student-name {
+                display: block !important;
+                color: #000 !important;
+                font-size: 18px !important;
+                font-weight: 800 !important;
+                text-align: center !important;
+                margin: 0 0 8px !important;
+            }
             .cell { 
                  min-height: auto !important; 
                  background-color: white !important; 
@@ -430,6 +442,7 @@
 
         </header>
 
+                    <div class="print-student-name" id="printStudentName"></div>
                     <div class="w-full overflow-x-auto custom-scrollbar pb-2">
                 <div id="scheduleGrid" class="grid grid-cols-6 gap-1.5 min-w-[600px]"></div>
             </div>
@@ -1539,6 +1552,10 @@
             const activeStudent = config.students.find(s => s.id === config.currentStudentId);
             if (activeStudent) {
                 document.getElementById('studentName').value = activeStudent.name;
+                const printStudentName = document.getElementById('printStudentName');
+                if (printStudentName) {
+                    printStudentName.textContent = activeStudent.name;
+                }
                 const photoContainer = document.getElementById('activeStudentHeaderPhotoContainer');
                 const photoImg = document.getElementById('activeStudentHeaderPhoto');
                 if (activeStudent.avatar) {
