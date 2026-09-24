@@ -935,7 +935,9 @@
                         if (
                             draft &&
                             payload.currentCells?.[draft.cellKey]?.note === draft.note &&
-                            payload.currentCells?.[draft.cellKey]?.showNote === draft.showNote
+                            payload.currentCells?.[draft.cellKey]?.showNote === draft.showNote &&
+                            payload.currentCells?.[draft.cellKey]?.bg === draft.bg &&
+                            payload.currentCells?.[draft.cellKey]?.textColor === draft.textColor
                         ) {
                             localStorage.removeItem(draftKey);
                         }
@@ -997,6 +999,8 @@
                 }
                 currentCells[draft.cellKey].note = String(draft.note ?? '');
                 currentCells[draft.cellKey].showNote = draft.showNote !== false;
+                if (typeof draft.bg === 'string') currentCells[draft.cellKey].bg = draft.bg;
+                if (typeof draft.textColor === 'string') currentCells[draft.cellKey].textColor = draft.textColor;
                 autoSaveToFirebase();
                 // Το draft διαγράφεται μόνο από το επιτυχημένο save worker,
                 // ώστε να μη χαθεί σε ανανέωση πριν ολοκληρωθεί το Firebase request.
@@ -2182,6 +2186,8 @@
                     cellKey,
                     note,
                     showNote: cell.showNote !== false,
+                    bg: String(cell.bg ?? ''),
+                    textColor: String(cell.textColor ?? ''),
                     updatedAt: Date.now()
                 }));
             }
@@ -2214,6 +2220,22 @@
             }
             currentCells[cellKey].bg = bgHex;
             currentCells[cellKey].textColor = textHex;
+
+            // Κρατάμε και τα χρώματα στο draft, ώστε να μη χαθούν σε ανανέωση
+            // πριν ολοκληρωθεί η ασύγχρονη αποθήκευση στο Firebase.
+            const userId = auth.currentUser?.uid;
+            if (userId && currentCells[cellKey].isStamp) {
+                localStorage.setItem(`fancyclass-note-draft-${userId}`, JSON.stringify({
+                    studentId: config.currentStudentId,
+                    cellKey,
+                    note: String(currentCells[cellKey].note ?? ''),
+                    showNote: currentCells[cellKey].showNote === true,
+                    bg: String(bgHex ?? ''),
+                    textColor: String(textHex ?? ''),
+                    updatedAt: Date.now()
+                }));
+            }
+
             renderGrid();
             autoSaveToFirebase();
         };
